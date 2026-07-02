@@ -10,7 +10,7 @@ from websockets.exceptions import InvalidStatus
 from elva.auth import DummyAuth, basic_authorization_header
 from elva.log import LOGGER_NAME
 from elva.provider import WebsocketProvider
-from elva.server import WebsocketServer
+from elva.server import FlagPolicy, WebsocketServer
 
 parametrize = mark.parametrize
 
@@ -60,7 +60,11 @@ async def test_connect(free_tcp_port, tmp_path):
 
     # run the server
     async with WebsocketServer(
-        LOCALHOST, free_tcp_port, persistent=True, path=tmp_path
+        LOCALHOST,
+        free_tcp_port,
+        persistent=FlagPolicy.ALWAYS,
+        permanent=FlagPolicy.ALWAYS,
+        path=tmp_path,
     ) as server:
         # run the provider
         async with WebsocketProvider(
@@ -106,7 +110,11 @@ async def test_multiple_connect_no_history(free_tcp_port):
     identifier = get_identifier()
 
     # run the server
-    async with WebsocketServer(LOCALHOST, free_tcp_port, persistent=False) as server:
+    async with WebsocketServer(
+        LOCALHOST,
+        free_tcp_port,
+        persistent=FlagPolicy.NEVER,
+    ) as server:
         # run the providers
         async with (
             WebsocketProvider(
@@ -225,7 +233,11 @@ async def test_manual_reconnect(free_tcp_port):
     # setup connection details
     identifier = get_identifier()
 
-    async with WebsocketServer(LOCALHOST, free_tcp_port, persistent=True) as server:
+    async with WebsocketServer(
+        LOCALHOST,
+        free_tcp_port,
+        persistent=FlagPolicy.ALWAYS,
+    ) as server:
         provider = WebsocketProvider(
             ydoc,
             identifier,
@@ -282,7 +294,7 @@ async def test_auto_reconnect(free_tcp_port):
     )
     sub_provider = provider.subscribe()
 
-    server = WebsocketServer(LOCALHOST, free_tcp_port, persistent=True)
+    server = WebsocketServer(LOCALHOST, free_tcp_port)
     sub_server = server.subscribe()
 
     # run the provider
@@ -341,7 +353,11 @@ async def test_synchronization_from_provider_to_server(free_tcp_port):
 
     # run both the server and the provider
     async with (
-        WebsocketServer(LOCALHOST, free_tcp_port, persistent=True) as server,
+        WebsocketServer(
+            LOCALHOST,
+            free_tcp_port,
+            persistent=FlagPolicy.ALWAYS,
+        ) as server,
         WebsocketProvider(
             ydoc,
             identifier,
@@ -383,7 +399,11 @@ async def test_synchronization_from_server_to_provider(free_tcp_port):
     identifier = get_identifier()
 
     # run the server
-    async with WebsocketServer(LOCALHOST, free_tcp_port, persistent=True) as server:
+    async with WebsocketServer(
+        LOCALHOST,
+        free_tcp_port,
+        persistent=FlagPolicy.ALWAYS,
+    ) as server:
         # simulate present remote content
         room = await server.get_room(identifier)
 
@@ -425,7 +445,11 @@ async def test_bidirectional_synchronization(free_tcp_port):
     identifier = get_identifier()
 
     # run the server
-    async with WebsocketServer(LOCALHOST, free_tcp_port, persistent=True) as server:
+    async with WebsocketServer(
+        LOCALHOST,
+        free_tcp_port,
+        persistent=FlagPolicy.ALWAYS,
+    ) as server:
         # simulate present remote content
         room = await server.get_room(identifier)
 

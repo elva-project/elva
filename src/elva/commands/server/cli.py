@@ -13,17 +13,21 @@ from click import Path as PathParamType
 from elva.cli import context, unset
 from elva.config import Config
 from elva.log import LOGGER_NAME, DefaultFormatter
-from elva.server import Visible
+from elva.server import FlagPolicy
 
 TRANSLATIONS = {
     "host": "host",
     "h": "host",
     "port": "port",
     "p": "port",
-    "save": "save",
-    "s": "save",
-    "directory": "directory",
-    "d": "directory",
+    "visible": "visible",
+    "v": "visible",
+    "persistent": "persistent",
+    "r": "persistent",
+    "permanent": "permanent",
+    "s": "permanent",
+    "path": "path",
+    "d": "path",
     "dummy": "dummy",
 }
 """
@@ -80,14 +84,43 @@ def run(config: Config) -> None:
     type=INT,
 )
 @option(
-    "--save",
-    "-s",
-    is_flag=True,
-    help="Save changes in local documents.",
+    "--visible",
+    "-v",
+    help=(
+        "Set the default or enforced visibility of rooms. "
+        f"Can be one of {', '.join(str(v) for v in FlagPolicy)}."
+    ),
+    metavar="VISIBILITY",
+    show_choices=False,
+    type=Choice(FlagPolicy),
     default=None,
 )
 @option(
-    "--directory",
+    "--persistent",
+    "-r",
+    help=(
+        "Set the default or enforced persistence of rooms. "
+        f"Can be one of {', '.join(str(v) for v in FlagPolicy)}."
+    ),
+    metavar="PERSISTENCE",
+    show_choices=False,
+    type=Choice(FlagPolicy),
+    default=None,
+)
+@option(
+    "--permanent",
+    "-s",
+    help=(
+        "Set the default or enforced permanence of rooms. "
+        f"Can be one of {', '.join(str(v) for v in FlagPolicy)}."
+    ),
+    metavar="PERMANENCE",
+    show_choices=False,
+    type=Choice(FlagPolicy),
+    default=None,
+)
+@option(
+    "--path",
     "-d",
     help="Path to stored documents.",
     type=PathParamType(
@@ -106,18 +139,6 @@ def run(config: Config) -> None:
     "--dummy",
     help="Enable Dummy Basic Authentication. DO NOT USE IN PRODUCTION.",
     is_flag=True,
-    default=None,
-)
-@option(
-    "--visible",
-    "-v",
-    help=(
-        "Set the default or enforced visibility of rooms. "
-        f"Can be one of {', '.join(str(v) for v in Visible)}."
-    ),
-    metavar="VISIBILITY",
-    show_choices=False,
-    type=Choice(Visible),
     default=None,
 )
 @unset(TRANSLATIONS)

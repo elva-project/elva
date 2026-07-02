@@ -68,6 +68,8 @@ class WebsocketProvider(Component):
         client_type: str = "elva",
         on_exception: Awaitable | None = None,
         visible: bool | None = None,
+        persistent: bool | None = None,
+        permanent: bool | None = None,
         tls_config: dict = {},
         **kwargs: dict[Any],
     ):
@@ -95,8 +97,13 @@ class WebsocketProvider(Component):
         netloc = f"{host}:{port}" if port is not None else host
         params = {"client": client_type}
 
-        if visible is not None:
-            params["visible"] = int(visible)
+        for name, value in (
+            ("visible", visible),
+            ("persistent", persistent),
+            ("permanent", permanent),
+        ):
+            if value is not None:
+                params[name] = int(value)
 
         query = urlencode(params)
 

@@ -8,7 +8,7 @@ from websockets.asyncio.server import basic_auth
 from elva.auth import DummyAuth
 from elva.config import Config
 from elva.core import PORT
-from elva.server import Visible, WebsocketServer
+from elva.server import FlagPolicy, WebsocketServer
 
 
 async def main(config: Config):
@@ -24,10 +24,14 @@ async def main(config: Config):
 
     host = c.get("server.host", "0.0.0.0")
     port = c.get("server.port", PORT)
-    save = c.get("server.save", False)
-    directory = c.get("server.directory")
+    path = c.get("server.path")
     dummy = c.get("server.dummy", False)
-    visible = c.get("server.visible", Visible.FALSE)
+    visible = c.get("server.visible", FlagPolicy.FALSE)
+    persistent = c.get("server.persistent", FlagPolicy.FALSE)
+    permanent = c.get(
+        "server.permanent",
+        FlagPolicy.NEVER if path is None else FlagPolicy.FALSE,
+    )
 
     if dummy:
         process_request = DummyAuth().check
@@ -43,11 +47,12 @@ async def main(config: Config):
     server = WebsocketServer(
         host=host,
         port=port,
-        persistent=save,
-        path=directory,
+        path=path,
         process_request=process_request,
         tls_config=c.get("tls", {}),
         visible=visible,
+        persistent=persistent,
+        permanent=permanent,
     )
 
     async with create_task_group() as tg:

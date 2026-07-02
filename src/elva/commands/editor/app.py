@@ -111,6 +111,8 @@ class UI(App):
                 port=port,
                 tls_config=c.get("tls", {}),
                 visible=c.get("room.visible"),
+                persistent=c.get("room.persistent"),
+                permanent=c.get("room.permanent"),
                 on_exception=self.on_provider_exception,
             )
 

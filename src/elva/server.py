@@ -6,9 +6,12 @@ import logging
 import re
 import socket
 from contextlib import closing
-from enum import Enum, auto
+from enum import Enum, IntFlag, auto
+from functools import partial, reduce
 from http import HTTPStatus
+from itertools import chain
 from json import dumps, loads
+from operator import or_
 from pathlib import Path
 from ssl import SSLContext
 from typing import Callable, Iterable
@@ -34,29 +37,29 @@ from elva.store import SQLiteStore
 from elva.tls import client, server
 
 
-class Visible(Enum):
+class FlagPolicy(Enum):
     """
-    Room visibility options.
+    Possible values for default or enforced boolean values.
     """
 
     NEVER = auto()
     """
-    Always set a room to be invisible, regardless of the client request.
+    Always set `False`, regardless of the client request.
     """
 
     FALSE = auto()
     """
-    Set a room to be invisible if nothing else was requested by the client.
+    Set `False` if nothing else was requested by the client.
     """
 
     TRUE = auto()
     """
-    Set a room to be visible if nothing else was requested by the client.
+    Set `True` if nothing else was requested by the client.
     """
 
     ALWAYS = auto()
     """
-    Always set a room to be visible, regardless of the client request.
+    Always `True`, regardless of the client request.
     """
 
     def __str__(self) -> str:
@@ -250,6 +253,32 @@ class RequestProcessor:
                 return out
 
 
+class RoomFlag(IntFlag):
+    """
+    Flags controlling the behavior of a [`Room`][elva.server.Room].
+    """
+
+    NONE = 0
+    """
+    No flags set.
+    """
+
+    VISIBLE = auto()
+    """
+    The room is set to be visible.
+    """
+
+    PERSISTENT = auto()
+    """
+    The room stores Y document updates in volatile memory.
+    """
+
+    PERMANENT = auto()
+    """
+    The room stores Y document updates in permanent storage.
+    """
+
+
 RoomState = create_component_state("RoomState")
 """The states of a [`Room`][elva.server.Room] component."""
 
@@ -262,11 +291,11 @@ class Room(Component):
     identifier: str
     """Identifier of the synchronized Y Document."""
 
-    persistent: bool
-    """Flag whether to store received Y Document updates."""
-
     path: None | Path
     """Path where to save a Y Document on disk."""
+
+    flags: RoomFlag
+    """Flags controlling the behavior of the room."""
 
     clients: set[ServerConnection]
     """Set of active connections."""
@@ -280,9 +309,8 @@ class Room(Component):
     def __init__(
         self,
         identifier: str,
-        persistent: bool = False,
         path: None | Path = None,
-        visible: bool = False,
+        flags: RoomFlag = RoomFlag.NONE,
     ):
         """
         If `persistent = False` and `path = None`, messages will be broadcasted only.
@@ -295,26 +323,25 @@ class Room(Component):
 
         Arguments:
             identifier: identifier for the used Y Document.
-            persistent: flag whether to store received Y Document updates.
             path: path where to save a Y Document on disk.
-            visible: `True` if the room should be visible, else `False`.
+            flags: flags controlling the behavior of the room.
         """
         self.identifier = identifier
-        self.persistent = persistent
 
         if path is not None:
             self.path = path / f"{identifier}.y"
         else:
             self.path = None
 
+        self.flags = flags
+
         self.clients = set()
 
-        if persistent:
+        if RoomFlag.PERSISTENT in flags:
             self.ydoc = Doc()
-            if path is not None:
-                self.store = SQLiteStore(self.ydoc, self.path)
 
-        self.visible = visible
+            if path is not None and RoomFlag.PERMANENT in flags:
+                self.store = SQLiteStore(self.ydoc, self.path)
 
     @property
     def states(self) -> RoomState:
@@ -404,7 +431,7 @@ class Room(Component):
             data: data received from `client`.
             client: connection from which `data` was received.
         """
-        if self.persistent:
+        if RoomFlag.PERSISTENT in self.flags:
             # properly dispatch message
             try:
                 message_type, payload, _ = YMessage.infer_and_decode(data)
@@ -478,8 +505,8 @@ class Room(Component):
         return dict(
             identifier=self.identifier,
             clients=len(self.clients),
-            persistent=self.persistent,
-            permanent=self.path is not None,
+            persistent=RoomFlag.PERSISTENT in self.flags,
+            permanent=RoomFlag.PERMANENT in self.flags,
         )
 
 
@@ -513,35 +540,38 @@ class WebsocketServer(Component):
     tls_config: dict
     """The `tls` config section of the ELVA config."""
 
-    visible: Visible
+    visible: FlagPolicy
     """The visibility setting for rooms."""
 
     def __init__(
         self,
         host: str,
         port: int,
-        persistent: bool = False,
         path: None | Path = None,
         process_request: None | Callable = None,
         tls_config: dict = {},
-        visible: Visible = Visible.FALSE,
+        visible: FlagPolicy = FlagPolicy.FALSE,
+        persistent: FlagPolicy = FlagPolicy.FALSE,
+        permanent: FlagPolicy = FlagPolicy.NEVER,
     ):
         """
         Arguments:
             host: hostname or IP address to be published at.
             port: port to listen on.
-            persistent: flag whether to save Y Document updates persistently.
             path: path where to store Y Document contents on disk.
             process_request: callable checking the HTTP request headers on new connections.
             tls_config: the `tls` config section of the ELVA config.
             visible: the visibility setting for rooms.
+            persistent: flag whether to save Y Document updates persistently.
+            permanent: flag whether to save Y Document updates on permanent storage.
         """
         self.host = host
         self.port = port
-        self.persistent = persistent
         self.path = path
         self.tls = server(host, tls_config)
         self.visible = visible
+        self.persistent = persistent
+        self.permanent = permanent
 
         if path is not None:
             # check whether `path` is writable, OS-agnostic
@@ -600,7 +630,12 @@ class WebsocketServer(Component):
             else:
                 self.log.info("broadcast only and no content will be stored")
 
-            self.log.info(f"set room visibility to {self.visible}")
+            for prop, value in (
+                ("visibility", self.visible),
+                ("persistence", self.persistent),
+                ("permanence", self.permanent),
+            ):
+                self.log.info(f"set room {prop} to {value}")
 
             # keep the server active indefinitely
             await anyio.sleep_forever()
@@ -682,32 +717,76 @@ class WebsocketServer(Component):
         return [
             room.info()
             for room in self.rooms.values()
-            if room.states.ACTIVE in room.state and room.visible
+            if room.states.ACTIVE in room.state and RoomFlag.VISIBLE in room.flags
         ]
 
-    def update_visibility(self, visible: bool | None = None) -> bool:
+    def extract_flag(self, name: str, query: dict) -> bool | None:
         """
-        Update the visibility depending on the query and the server policy.
+        Extract the flag value from a URL query parameter.
 
         Arguments:
-            visible: flag given in the client's HTTP request query.
+            name: the parameter name.
+            query: the URL query.
 
         Returns:
-            `True` if the room is set to be visible, else `False` if the room
-            shall be hidden.
+            `None` if the parameter is not pressent, `True` if the
+            parameter is set to `"1"` and `False` otherwise.
         """
-        match self.visible:
-            case Visible.ALWAYS | Visible.NEVER:
-                return bool(self.visible)
-            case Visible.TRUE | Visible.FALSE:
-                return bool(self.visible) if visible is None else visible
+        value = query.get(name, [None])[0]
 
-    async def get_room(self, identifier: str, visible: bool | None = None) -> Room:
+        if value is not None:
+            return value == "1"
+
+    def update_flag(self, policy: FlagPolicy, value: bool | None = None) -> bool:
+        """
+        Update a flag depending on the URL query and the flag policy.
+
+        Arguments:
+            policy: the server policy for this flag.
+            value: flag given in the client's HTTP request query.
+
+        Returns:
+            `True` the flag should be set, else `False`.
+        """
+        match policy:
+            case FlagPolicy.ALWAYS | FlagPolicy.NEVER:
+                return bool(policy)
+            case FlagPolicy.TRUE | FlagPolicy.FALSE:
+                return bool(policy) if value is None else value
+
+    def filter_flag(self, flag: RoomFlag, query: dict) -> bool:
+        """
+        Filter a flag member depending on its value and the flag policy.
+
+        Arguments:
+            flag: the room flag to check.
+            query: the URL query.
+
+        Returns:
+            `True` if the flag should set, `False` otherwise.
+        """
+        name = flag.name.lower()
+        policy = getattr(self, name)
+        value = self.extract_flag(name, query)
+
+        out = self.update_flag(policy, value=value)
+
+        negate = "" if out else "not"
+        self.log.info(f"set room {negate} to be {name}".replace("  ", " "))
+
+        return out
+
+    async def get_room(
+        self,
+        identifier: str,
+        query: dict = {},
+    ) -> Room:
         """
         Get or create a [`Room`][elva.server.Room] via its corresponding `identifier`.
 
         Arguments:
             identifier: string identifiying the underlying Y Document.
+            query: the mapping of parsed URL query parameters.
 
         Returns:
             room to the given `identifier`.
@@ -716,13 +795,19 @@ class WebsocketServer(Component):
         try:
             room = self.rooms[identifier]
         except KeyError:
-            visible = self.update_visibility(visible)
+            flags = reduce(
+                or_,
+                chain(
+                    filter(partial(self.filter_flag, query=query), RoomFlag),
+                    # include NONE for empty filter result
+                    (RoomFlag.NONE,),
+                ),
+            )
 
             room = Room(
                 identifier,
-                persistent=self.persistent,
                 path=self.path,
-                visible=visible,
+                flags=flags,
             )
 
             self.rooms[identifier] = room
@@ -748,13 +833,10 @@ class WebsocketServer(Component):
         parsed = urlparse(websocket.request.path)
         identifier = parsed.path[1:]  # Remove leading `/`
         query = parse_qs(parsed.query)
-        client_type = query.get("client", ["unknown"])[0]
-        visible = query.get("visible")
 
-        if visible is not None:
-            visible = visible[0] == "1"
+        client_type = query.pop("client", ["unknown"])[0]
 
-        room = await self.get_room(identifier, visible=visible)
+        room = await self.get_room(identifier, query)
 
         # Get client IP for logging
         remote = websocket.remote_address

@@ -14,7 +14,7 @@ from websockets.protocol import State as ConnectionState
 
 from elva.auth import Auth, DummyAuth, basic_authorization_header
 from elva.protocol import YMessage
-from elva.server import RequestProcessor, WebsocketServer, free_tcp_port
+from elva.server import FlagPolicy, RequestProcessor, WebsocketServer, free_tcp_port
 
 ## ANYIO PYTEST PLUGIN
 pytestmark = pytest.mark.anyio
@@ -132,7 +132,11 @@ async def test_websocket_server_request_processor(free_tcp_port):
 
 
 async def test_websocket_server_restart(free_tcp_port):
-    server = WebsocketServer(LOCALHOST, free_tcp_port, persistent=True)
+    server = WebsocketServer(
+        LOCALHOST,
+        free_tcp_port,
+        persistent=FlagPolicy.ALWAYS,
+    )
 
     identifier = "foo-bar-baz"
     uri = websocket_client_uri(server.host, server.port, identifier)
@@ -167,7 +171,7 @@ async def test_websocket_server_no_persistence(free_tcp_port):
     async with WebsocketServer(
         host=LOCALHOST,
         port=free_tcp_port,
-        persistent=False,  # the default
+        persistent=FlagPolicy.NEVER,  # the default
     ) as websocket_server:
         # no storage active
         assert not hasattr(websocket_server, "store")
@@ -202,7 +206,7 @@ async def test_websocket_server_volatile_persistence(free_tcp_port):
     async with WebsocketServer(
         host=LOCALHOST,
         port=free_tcp_port,
-        persistent=True,  # <-- now `True`, no `path`
+        persistent=FlagPolicy.ALWAYS,  # <-- now `True`, no `path`
     ) as websocket_server:
         # no storage active
         assert not hasattr(websocket_server, "store")
@@ -306,7 +310,8 @@ async def test_websocket_server_permanent_persistence(free_tcp_port, tmp_path):
     async with WebsocketServer(
         host=LOCALHOST,
         port=free_tcp_port,
-        persistent=True,
+        persistent=FlagPolicy.ALWAYS,
+        permanent=FlagPolicy.ALWAYS,
         path=tmp_path,  # <-- with a path set
     ) as websocket_server:
         # CRDTs to operate on
@@ -406,7 +411,8 @@ async def test_websocket_server_permanent_persistence(free_tcp_port, tmp_path):
     async with WebsocketServer(
         host=LOCALHOST,
         port=free_tcp_port,
-        persistent=True,
+        persistent=FlagPolicy.ALWAYS,
+        permanent=FlagPolicy.ALWAYS,
         path=tmp_path,
     ) as websocket_server:
         # no room created yet
