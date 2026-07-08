@@ -22,6 +22,22 @@ class Dashboard(Screen):
     showing the active clients in the current session.
     """
 
+    CSS = """
+        Dashboard {
+          layout: grid;
+          grid-size: 2;
+          grid-columns: 2fr 1fr;
+
+          ConfigView, AwarenessView {
+            padding: 0 1 0 1;
+            border: solid $primary;
+          }
+        }
+    """
+    """
+    The default TCSS.
+    """
+
     def compose(self):
         """
         Hook adding child widgets.
@@ -41,6 +57,21 @@ class Dashboard(Screen):
 class RoomBrowserScreen(Screen):
     """
     Screen for browsing and selecting available rooms on the server.
+    """
+
+    CSS = """
+        RoomBrowserScreen {
+          layout: vertical;
+
+          DataTable {
+            height: 1fr;
+            padding: 0 1;
+            border: solid $primary;
+          }
+        }
+    """
+    """
+    The default TCSS.
     """
 
     BINDINGS = [
@@ -143,6 +174,25 @@ class InputScreen(ModalScreen):
     A plain modal screen with a single input field.
     """
 
+    CSS = """
+        InputScreen {
+          layout: grid;
+          align: center middle;
+
+          Input {
+            border: solid $border;
+            width: 80%;
+
+            .input--cursor {
+              color: $foreground;
+            }
+          }
+        }
+    """
+    """
+    The default TCSS.
+    """
+
     def compose(self):
         """
         Hook adding child widgets.
@@ -170,6 +220,21 @@ class InputScreen(ModalScreen):
 class ErrorScreen(ModalScreen):
     """
     Modal screen displaying an exception message.
+    """
+
+    CSS = """
+        ErrorScreen {
+          align: center middle;
+          border: solid $error;
+
+          * {
+            content-align: center middle;
+            padding: 1 0 1 0;
+          }
+        }
+    """
+    """
+    The default TCSS.
     """
 
     exc: str

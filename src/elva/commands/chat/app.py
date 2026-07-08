@@ -6,28 +6,17 @@ import logging
 import re
 import uuid
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Literal
 
 import emoji
 from pycrdt import Array, Doc, Map, Text, TextEvent
 from rich.markdown import Markdown as RichMarkdown
-from textual.app import App
 from textual.containers import VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Rule, Static, TabbedContent, TabPane
-from websockets.exceptions import InvalidStatus, WebSocketException
 
-from elva.config import Config
-from elva.files import get_data_file_path, get_render_file_path
+from elva.app import App
 from elva.parser import ArrayEventParser, MapEventParser
-from elva.provider import WebsocketProvider
-from elva.renderer import TextRenderer
-from elva.store import SQLiteStore
-from elva.widgets.awareness import AwarenessView
-from elva.widgets.config import ConfigView
-from elva.widgets.screens import Dashboard, ErrorScreen, InputScreen
 from elva.widgets.ytextarea import YTextArea
 
 log = logging.getLogger(__name__)
@@ -288,99 +277,43 @@ class UI(App):
     User interface.
     """
 
-    CSS_PATH = "style.tcss"
-    """The path to the default CSS."""
+    NAME = "chat"
+    """
+    App and config section name.
+    """
 
-    SCREENS = {
-        "dashboard": Dashboard,
-        "input": InputScreen,
-    }
-    """The installed screens."""
+    CSS_PATH = "style.tcss"
+    """
+    The path to the default TCSS.
+    """
 
     BINDINGS = [
         ("shift+enter", "send", "Send currently composed message"),
         ("ctrl+enter", "send", "Send currently composed message"),
         ("ctrl+o", "send", "Send currently composed message"),
-        ("ctrl+b", "toggle_dashboard", "Toggle the dashboard"),
-        ("ctrl+s", "save", "Save to data file"),
-        ("ctrl+r", "render", "Render to file"),
     ]
     """Key bindings for controlling the app."""
 
-    def __init__(self, config: Config) -> None:
-        """
-        Arguments:
-            config: mapping of configuration parameters.
-        """
-        # structure
-        self.ydoc = ydoc = Doc()
-        ydoc["history"] = self.history = Array()
-        ydoc["future"] = self.future = Map()
+    def set_ydoc(self):
+        self.ydoc = Doc()
+        self.ydoc["history"] = self.history = Array()
+        self.ydoc["future"] = self.future = Map()
 
-        self.client_id = str(self.ydoc.client_id)
+        self.message, self.ytext, _ = self.get_message("")
 
-        self.config = c = config
+        self.future[self.config["user.identifier"]] = self.message
+
+    def set_defaults(self):
+        fallback_id = self.get_new_id()
 
         for path, default in (
+            ("config.dump", True),
             ("connect.identifier", self.ydoc.guid),
-            ("user.name", self.client_id),
-            ("user.display", self.client_id),
-            ("render.auto", True),
+            ("user.identifier", fallback_id),
+            ("user.name", fallback_id),
             ("chat.self", False),
         ):
-            c.setdefault(path, default)
-
-        super().__init__()
-
-        self.user = c["user.name"]
-        self.display_name = c["user.display"]
-        self.show_self = c["chat.self"]
-
-        self.message, self.ytext, message_id = self.get_message("")
-
-        # components
-        self.components = []
-
-        if (file := c.get("chat.data")) is not None:
-            self.store = SQLiteStore(
-                self.ydoc,
-                file,
-            )
-
-            if c.get("config.dump", False):
-                trimmed = Config(c.deepcopy())
-
-                trimmed.pop("config", None)
-                trimmed.pop("chat.data", None)
-
-                self.store.set_config(trimmed, replace=c.get("config.replace", False))
-
-            self.components.append(self.store)
-
-        if c.get("connect.host") is not None:
-            self.provider = WebsocketProvider(
-                ydoc,
-                c["connect.identifier"],
-                c["connect.host"],
-                port=c.get("connect.port"),
-                tls_config=c.get("tls", {}),
-                visible=c.get("room.visible"),
-                persistent=c.get("room.persistent"),
-                permanent=c.get("room.permanent"),
-                on_exception=self.on_provider_exception,
-            )
-
-            self.provider.awareness.set_local_state(c.get("user", {}))
-
-            self.components.append(self.provider)
-
-        if (file := c.get("render.file")) is not None:
-            self.renderer = TextRenderer(
-                self.history,
-                file,
-                c["render.auto"],
-            )
-            self.components.append(self.renderer)
+            self.config.setdefault(path, default)
 
     def get_new_id(self) -> str:
         """
@@ -411,9 +344,9 @@ class UI(App):
         ymap = Map(
             {
                 "text": ytext,
-                "author_display": self.display_name,
+                "author_display": self.config["user.name"],
                 # we assume that self.user is unique in the room, ensured by the server
-                "author": self.user,
+                "author": self.config["user.identifier"],
                 "id": message_id,
                 "timestamp": datetime.now().isoformat(),
             }
@@ -421,72 +354,49 @@ class UI(App):
 
         return ymap, ytext, message_id
 
-    async def run_components(self):
-        """
-        Run all components the chat app needs.
-        """
-        for comp in self.components:
-            self.run_worker(comp.start())
-            sub = comp.subscribe()
-            while comp.states.RUNNING not in comp.state:
-                await sub.receive()
-            comp.unsubscribe(sub)
-
     async def on_mount(self):
         """
         Hook called on mounting the app.
 
         This methods waits for all components to set their `RUNNING` state.
         """
-        if hasattr(self, "provider"):
-            self.subscription = self.provider.awareness.observe(
-                self.on_awareness_update
-            )
-
-        await self.run_components()
-
-        self.future[self.client_id] = self.message
-
-        tabbed_content = self.query_one(TabbedContent)
-        ytext_pane = TabPane(
-            "Message",
-            YTextArea(
-                self.ytext,
-                id="editor",
-                language="markdown",
-            ),
-            id="tab-message",
-        )
-        preview_pane = TabPane(
-            "Preview",
-            VerticalScroll(MessagePreview(self.ytext)),
-            id="tab-preview",
-        )
-
-        for pane in (ytext_pane, preview_pane):
-            await tabbed_content.add_pane(pane)
-
         message_widget = self.query_one(YTextArea)
         message_widget.focus()
+
+    def reload(self):
+        """
+        Custom reload logic.
+        """
+        self.set_defaults()
 
     def compose(self):
         """
         Hook arranging child widgets.
         """
-        yield History(self.history, self.user, id="history")
+        c = self.config
+
+        yield from super().compose()
+
+        yield History(self.history, c["user.identifier"], id="history")
         yield Rule(line_style="heavy")
-        yield Future(self.future, self.user, show_self=self.show_self, id="future")
-        yield TabbedContent(id="tabview")
+        yield Future(
+            self.future,
+            c["user.identifier"],
+            show_self=c["chat.self"],
+            id="future",
+        )
 
-    def on_unmount(self):
-        """
-        Hook called on unmounting.
+        print(self.ytext)
 
-        It cancels the subscription to changes in the awareness states.
-        """
-        if hasattr(self, "subscription"):
-            self.provider.awareness.unobserve(self.subscription)
-            del self.subscription
+        with TabbedContent(id="tabview"):
+            with TabPane("Message", id="tab-message"):
+                yield YTextArea(
+                    self.ytext,
+                    id="editor",
+                    language="markdown",
+                )
+            with TabPane("Preview", id="tab-preview"):
+                yield VerticalScroll(MessagePreview(self.ytext))
 
     async def action_send(self):
         """
@@ -512,176 +422,3 @@ class UI(App):
         message_widget = self.query_one(YTextArea)
         if event.pane.id == "tab-message":
             message_widget.focus()
-
-    def on_provider_exception(self, exc: WebSocketException, config: dict):
-        """
-        Wrapper method around the provider exception handler
-        [`_on_provider_exception`][elva.apps.editor.app.UI._on_provider_exception].
-
-        Arguments:
-            exc: the exception raised by the provider.
-            config: the configuration stored in the provider.
-        """
-        self.run_worker(self._on_provider_exception(exc, config))
-
-    async def _on_provider_exception(self, exc: WebSocketException, config: dict):
-        """
-        Handler for exceptions raised by the provider.
-
-        It exits the app after displaying the error message to the user.
-
-        Arguments:
-            exc: the exception raised by the provider.
-            config: the configuration stored in the provider.
-        """
-        await self.provider.stop()
-
-        if type(exc) is InvalidStatus:
-            response = exc.response
-            exc = f"HTTP {response.status_code}: {response.reason_phrase}"
-
-        await self.push_screen_wait(ErrorScreen(exc))
-        self.exit(return_code=1)
-
-    def on_awareness_update(
-        self, topic: Literal["update", "change"], data: tuple[dict, Any]
-    ):
-        """
-        Wrapper method around the
-        [`_on_awareness_update`][elva.apps.editor.app.UI._on_awareness_update]
-        callback.
-
-        Arguments:
-            topic: the topic under which the changes are published.
-            data: manipulation actions taken as well as the origin of the changes.
-        """
-        if topic == "change":
-            self.run_worker(self._on_awareness_update(topic, data))
-
-    async def _on_awareness_update(
-        self, topic: Literal["update", "change"], data: tuple[dict, Any]
-    ):
-        """
-        Hook called on a change in the awareness states.
-
-        It pushes client states to the dashboard and removes offline client IDs from the future.
-
-        Arguments:
-            topic: the topic under which the changes are published.
-            data: manipulation actions taken as well as the origin of the changes.
-        """
-        if self.screen == self.get_screen("dashboard"):
-            self.push_client_states()
-
-        actions, origin = data
-        removed = actions["removed"]
-        for client_id in removed:
-            if str(client_id) != self.client_id:
-                try:
-                    del self.future[str(client_id)]
-                except KeyError:
-                    pass
-
-    async def action_save(self):
-        """
-        Action performed on triggering the `save` key binding.
-        """
-        # alias
-        c = self.config
-
-        if c.get("chat.data") is None:
-            self.run_worker(self.get_and_set_file_paths())
-
-    async def get_and_set_file_paths(self, data_file: bool = True):
-        """
-        Get and set the data or render file paths after the input prompt.
-
-        Arguments:
-            data_file: flag whether to add a data file path to the config.
-        """
-        name = await self.push_screen_wait("input")
-
-        if not name:
-            return
-
-        # alias
-        c = self.config
-
-        path = Path(name)
-
-        data_file_path = get_data_file_path(path)
-        if data_file:
-            c["chat.data"] = data_file_path
-
-            self.store = SQLiteStore(
-                self.ydoc,
-                c.get("connect.identifier", self.ydoc.guid),
-                data_file_path,
-            )
-            self.components.append(self.store)
-            self.run_worker(self.store.start())
-
-        if c.get("render.file") is None:
-            render_file_path = get_render_file_path(data_file_path)
-
-            c["render.file"] = render_file_path
-
-            self.renderer = TextRenderer(
-                self.history,
-                render_file_path,
-                c.get("render.auto", True),
-            )
-            self.components.append(self.renderer)
-            self.run_worker(self.renderer.start())
-
-        if self.screen == self.get_screen("dashboard"):
-            self.push_config()
-
-    async def action_render(self):
-        """
-        Action performed on triggering the `render` key binding.
-        """
-        # alias
-        c = self.config
-
-        if c.get("render.file") is None:
-            self.run_worker(self.get_and_set_file_paths(data_file=False))
-        else:
-            await self.renderer.write()
-
-    async def action_toggle_dashboard(self):
-        """
-        Action performed on triggering the `toggle_dashboard` key binding.
-        """
-        if self.screen == self.get_screen("dashboard"):
-            self.pop_screen()
-        else:
-            await self.push_screen("dashboard")
-            self.push_client_states()
-            self.push_config()
-
-    def push_client_states(self):
-        """
-        Method pushing the client states to the active dashboard.
-        """
-        if hasattr(self, "provider"):
-            client_states = self.provider.awareness.client_states.copy()
-            client_id = self.provider.awareness.client_id
-            if client_id not in client_states:
-                return
-            states = list()
-            states.append((client_id, client_states.pop(client_id)))
-            states.extend(list(client_states.items()))
-            states = tuple(states)
-
-            awareness_view = self.screen.query_one(AwarenessView)
-            awareness_view.states = states
-
-    def push_config(self):
-        """
-        Method pushing the configuration mapping to the active dashboard.
-        """
-        config = tuple(self.config.items())
-
-        config_view = self.screen.query_one(ConfigView)
-        config_view.config = config
