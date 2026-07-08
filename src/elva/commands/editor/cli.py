@@ -52,15 +52,8 @@ def run(config: Config) -> None:
     app = import_(".app", __package__)
 
     # run app
-    while True:
-        ui = app.UI(c)
-        result = ui.run()
-
-        if isinstance(result, str):
-            c["connect.identifier"] = result
-            continue
-
-        break
+    ui = app.UI(c)
+    ui.run()
 
     return ui.return_code
 

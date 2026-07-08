@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pycrdt import Doc, Text
+from textual import work
 from textual.app import App
 from textual.binding import Binding
 from textual.widgets import Footer, Header
@@ -65,31 +66,45 @@ class UI(App):
         Arguments:
             config: mapping of configuration parameters to their values.
         """
-        # document structure
+        self.config = config
+        self.config_cache = dict()
+
+        # initialize `Textual` app
+        super().__init__(ansi_color=config.get("editor.ansi", False))
+
+    def set_ydoc(self):
+        """
+        Set the document structure.
+        """
         self.ydoc = Doc()
         self.ytext = Text()
-        self.ydoc["ytext"] = self.ytext
+        self.ydoc["text"] = self.ytext
 
-        # define defaults
-        self.config = c = config
-
+    def set_defaults(self):
+        """
+        Set config defaults.
+        """
         for path, default in (
             ("config.dump", True),
             ("connect.identifier", self.ydoc.guid),
-            ("connect.safe", True),
-            ("render.auto", True),
-            ("render.timeout", 300),
-            ("editor.ansi", False),
         ):
-            c.setdefault(path, default)
+            self.config.setdefault(path, default)
 
-        # initialize `Textual` app
-        super().__init__(ansi_color=c.get("editor.ansi", False))
+    def set_language(self):
+        """
+        Set the document language.
+        """
+        self._language = self.config.get("editor.language")
 
-        # build title for header
+    def set_title(self):
+        """
+        Set the app title.
+        """
+        c = self.config
+
         host = c.get("connect.host")
         port = c.get("connect.port")
-        identifier = c["connect.identifier"]
+        identifier = c.get("connect.identifier")
 
         if host and identifier:
             if port:
@@ -99,16 +114,21 @@ class UI(App):
         elif identifier:
             self.title = identifier
         else:
-            self.title = "Elva"
+            self.title = "ELVA"
 
-        self.components = list()
+    @work(exclusive=True, group="provider")
+    async def run_provider(self):
+        """
+        Run a websocket provider.
+        """
+        c = self.config
 
-        if host is not None:
+        if (host := c.get("connect.host")) is not None:
             self.provider = WebsocketProvider(
                 self.ydoc,
-                identifier,
+                c["connect.identifier"],
                 host,
-                port=port,
+                port=c.get("connect.port"),
                 tls_config=c.get("tls", {}),
                 visible=c.get("room.visible"),
                 persistent=c.get("room.persistent"),
@@ -116,49 +136,79 @@ class UI(App):
                 on_exception=self.on_provider_exception,
             )
 
-            self.provider.awareness.set_local_state(c.get("user", {}))
+            awareness = self.provider.awareness
 
-            self.components.append(self.provider)
+            user = c.get("user")
+            user = user.copy() if user is not None else {}
+            awareness.set_local_state(user)
+
+            sub = awareness.observe(self.on_awareness_update)
+
+            await self.provider.start()
+
+            awareness.unobserve(sub)
+
+    @work(exclusive=True, group="store")
+    async def run_store(self):
+        """
+        Run an SQLite store.
+        """
+        c = self.config
 
         if (file := c.get("editor.data")) is not None:
-            self.store = SQLiteStore(
-                self.ydoc,
-                file,
-            )
+            self.store = SQLiteStore(self.ydoc, file)
 
             if c.get("config.dump", False):
                 trimmed = Config(c.deepcopy())
 
-                trimmed.pop("config", None)
-                trimmed.pop("editor.data", None)
+                for path in ("config", "editor.data"):
+                    trimmed.pop(path, None)
 
-                self.store.set_config(trimmed, replace=c.get("config.replace", False))
+                self.store.set_config(
+                    trimmed,
+                    replace=c.get("config.replace", False),
+                )
 
-            self.components.append(self.store)
+            await self.store.start()
+
+    @work(exclusive=True, group="renderer")
+    async def run_renderer(self):
+        """
+        Run the renderer.
+        """
+        c = self.config
 
         if (file := c.get("render.file")) is not None:
+            kwargs = dict(
+                (key, value)
+                for key in ("auto", "timeout")
+                if (value := c.get(f"render.{key}")) is not None
+            )
+
             self.renderer = TextRenderer(
                 self.ytext,
                 file,
-                auto_save=c["render.auto"],
-                timeout=c["render.timeout"],
+                **kwargs,
             )
-            self.components.append(self.renderer)
 
-        self._language = c.get("editor.language")
+            await self.renderer.start()
 
-    def on_provider_exception(self, exc: WebSocketException, config: dict):
+    def reload(self) -> None:
         """
-        Wrapper method around the provider exception handler
-        [`_on_provider_exception`][elva.apps.editor.app.UI._on_provider_exception].
-
-        Arguments:
-            exc: the exception raised by the provider.
-            config: the configuration stored in the provider.
+        Reload the app.
         """
-        self.run_worker(self._on_provider_exception(exc, config))
+        self.set_ydoc()
+        self.set_defaults()
+        self.set_title()
+        self.set_language()
 
-    async def _on_provider_exception(self, exc: WebSocketException, config: dict):
+        # components
+        self.run_provider()
+        self.run_store()
+        self.run_renderer()
+
+    @work
+    async def on_provider_exception(self, exc: WebSocketException, config: dict):
         """
         Handler for exceptions raised by the provider.
 
@@ -177,23 +227,8 @@ class UI(App):
         await self.push_screen_wait(ErrorScreen(exc))
         self.exit(return_code=1)
 
-    def on_awareness_update(
-        self, topic: Literal["update", "change"], data: tuple[dict, Any]
-    ):
-        """
-        Wrapper method around the
-        [`_on_awareness_update`][elva.apps.editor.app.UI._on_awareness_update]
-        callback.
-
-        Arguments:
-            topic: the topic under which the changes are published.
-            data: manipulation actions taken as well as the origin of the changes.
-        """
-        # Handle dashboard updates via worker
-        if topic == "change":
-            self.run_worker(self._on_awareness_update(topic, data))
-
-    async def _on_awareness_update(
+    @work
+    async def on_awareness_update(
         self, topic: Literal["update", "change"], data: tuple[dict, Any]
     ):
         """
@@ -205,12 +240,17 @@ class UI(App):
             topic: the topic under which the changes are published.
             data: manipulation actions taken as well as the origin of the changes.
         """
+        if topic != "change":
+            return
+
         if self.screen == self.get_screen("dashboard"):
             self.push_client_states()
 
     async def wait_for_component_state(
-        self, component: Component, state: ComponentState
-    ):
+        self,
+        component: Component,
+        state: ComponentState,
+    ) -> None:
         """
         Wait for a component to set a specific state.
 
@@ -219,18 +259,16 @@ class UI(App):
             state: the awaited state.
         """
         sub = component.subscribe()
+
         while state != component.state:
             await sub.receive()
+
         component.unsubscribe(sub)
 
     async def on_mount(self):
         """
         Hook called on mounting the app.
         """
-        if hasattr(self, "provider"):
-            self.subscription = self.provider.awareness.observe(
-                self.on_awareness_update
-            )
 
         # alias
         c = self.config
@@ -250,41 +288,26 @@ class UI(App):
                 with render_file_path.open(mode="r") as fd:
                     text = fd.read()
 
-        # wait for components to run
-        for comp in self.components:
-            self.run_worker(comp.start())
-            await self.wait_for_component_state(
-                comp, comp.states.ACTIVE | comp.states.RUNNING
-            )
-
         # now add the text to save updates to disk and send them over wire
         if text:
             ytextarea = self.query_one(YTextArea)
             ytextarea.load_text(text)
 
         # auto-browse rooms if no identifier was provided
-        if not self.config.get("identifier") and self.config.get("host"):
-            self.run_worker(self._browse_rooms())
+        if not c.get("connect.identifier"):
+            self.action_browse_rooms()
 
     async def on_unmount(self):
         """
         Hook called on unmounting the app.
         """
-        if hasattr(self, "subscription"):
-            self.provider.awareness.unobserve(self.subscription)
-            del self.subscription
-
-        for comp in self.components:
-            await self.wait_for_component_state(comp, comp.states.NONE)
+        await self.workers.wait_for_complete()
 
     def compose(self):
         """
         Hook arranging child widgets.
         """
-        if hasattr(self, "provider"):
-            awareness = self.provider.awareness
-        else:
-            awareness = None
+        self.reload()
 
         yield YTextArea(
             self.ytext,
@@ -292,7 +315,7 @@ class UI(App):
             show_line_numbers=True,
             id="editor",
             language=self.language,
-            awareness=awareness,
+            awareness=self.provider.awareness if hasattr(self, "provider") else None,
         )
         yield Header(show_clock=False, icon="")
         yield Footer()
@@ -332,8 +355,9 @@ class UI(App):
         c = self.config
 
         if c.get("editor.data") is None:
-            self.run_worker(self.get_and_set_file_paths())
+            self.get_and_set_file_paths()
 
+    @work
     async def get_and_set_file_paths(self, data_file: bool = True):
         """
         Get and set the data or render file paths after the input prompt.
@@ -355,26 +379,14 @@ class UI(App):
 
         if data_file:
             c["editor.data"] = data_file_path
-            self.store = SQLiteStore(
-                self.ydoc,
-                c.get("connect.identifier", self.ydoc.guid),
-                data_file_path,
-            )
-            self.components.append(self.store)
-            self.run_worker(self.store.start())
+
+            self.run_store()
 
         if c.get("render.file") is None:
             render_file_path = get_render_file_path(data_file_path)
-
             c["render.file"] = render_file_path
 
-            self.renderer = TextRenderer(
-                self.ytext,
-                render_file_path,
-                c.get("render.auto", False),
-            )
-            self.components.append(self.renderer)
-            self.run_worker(self.renderer.start())
+            self.run_renderer()
 
         if self.screen == self.get_screen("dashboard"):
             self.push_config()
@@ -384,7 +396,7 @@ class UI(App):
         Action performed on triggering the `render` key binding.
         """
         if self.config.get("render.file") is None:
-            self.run_worker(self.get_and_set_file_paths(data_file=False))
+            self.get_and_set_file_paths(data_file=False)
         else:
             await self.renderer.write()
 
@@ -399,43 +411,58 @@ class UI(App):
             self.push_client_states()
             self.push_config()
 
+    @work
     async def action_browse_rooms(self):
-        """
-        Action performed on triggering the `browse_rooms` key binding.
-        """
-        host = self.config.get("connect.host")
-        if host is None:
-            return
-        self.run_worker(self._browse_rooms())
-
-    async def _browse_rooms(self):
         """
         Open the room browser screen and handle selection.
 
         Must run inside a worker since it uses `push_screen_wait`.
         """
-        host = self.config.get("connect.host")
-        port = self.config.get("connect.port")
+        c = self.config
+
+        host = c.get("connect.host")
+
+        if host is None:
+            return
+
+        port = c.get("connect.port")
+
         screen = RoomBrowserScreen(host, port)
         identifier = await self.push_screen_wait(screen)
 
-        if identifier is not None:
-            current = self.config.get("connect.identifier")
-            if identifier != current:
-                self.exit(result=identifier)
+        if identifier is not None and identifier != c.get("connect.identifier"):
+            if (new := self.config_cache.get(identifier)) is None:
+                # no config present
+                new = Config(c.deepcopy())
+
+                # remove previous files
+                for path in ("editor.file", "render.file"):
+                    new.pop(path, None)
+
+                # update identifier
+                new["connect.identifier"] = identifier
+
+                self.config_cache[identifier] = new
+
+            self.config = new
+
+            await self.recompose()
 
     def push_client_states(self):
         """
         Method pushing the client states to the active dashboard.
         """
         if hasattr(self, "provider"):
-            client_states = self.provider.awareness.client_states.copy()
-            client_id = self.provider.awareness.client_id
+            awareness = self.provider.awareness
+
+            client_states = awareness.client_states.copy()
+            client_id = awareness.client_id
+
             if client_id not in client_states:
                 return
-            states = list()
-            states.append((client_id, client_states.pop(client_id)))
-            states.extend(list(client_states.items()))
+
+            states = [(client_id, client_states.pop(client_id))]
+            states.extend(client_states.items())
             states = tuple(states)
 
             awareness_view = self.screen.query_one(AwarenessView)
