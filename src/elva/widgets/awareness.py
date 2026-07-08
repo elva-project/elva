@@ -63,17 +63,10 @@ class AwarenessView(VerticalScroll):
         Returns:
             the widget representing the client state.
         """
-        client, data = state
+        client, user = state
 
         # try to get the display name from the state data
-        user = data.get("user")
-        name = ""
-
-        if isinstance(user, dict):
-            name = user.get("name", name)
-
-        if name:
-            client = name
+        name = user.get("name", client)
 
         add = " (me)" if local else ""
-        return ClientView(f"∙ {client}{add}")
+        return ClientView(f"∙ {name}{add}")
