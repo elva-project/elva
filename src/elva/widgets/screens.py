@@ -64,7 +64,7 @@ class RoomBrowserScreen(Screen):
         """
         table = DataTable(id="room-table")
         table.cursor_type = "row"
-        table.add_columns("Room", "Clients", "Persistent")
+        table.add_columns("Room", "Clients", "Persistent", "Permanent")
         yield table
 
     async def on_mount(self):
@@ -83,25 +83,44 @@ class RoomBrowserScreen(Screen):
         try:
             rooms = fetch_rooms(self.host, self.port)
         except Exception as exc:
-            table.add_row(f"error: {exc}", "", "", key="__error__")
+            table.add_row(f"error: {exc}", "", "", "", key="__error__")
             return
 
         if not rooms:
-            table.add_row("(no rooms found)", "", "", key="__empty__")
+            table.add_row("(no rooms found)", "", "", "", key="__empty__")
         else:
-            for room in rooms:
+            for r, room in enumerate(rooms):
                 table.add_row(
-                    room["identifier"],
-                    str(room["clients"]),
-                    "yes" if room["persistent"] else "no",
-                    key=room["identifier"],
+                    room.get("identifier", "?"),
+                    str(room.get("clients", "?")),
+                    self.get_parameter_value(room, "persistent"),
+                    self.get_parameter_value(room, "permanent"),
+                    key=room.get("identifier", f"__{r}__"),
                 )
+
+    def get_parameter_value(self, room: dict, parameter: str) -> str:
+        """
+        Get the value representation of a boolean parameter.
+
+        Arguments:
+            room: the room object.
+            parameter: the parameter name.
+
+        Returns:
+            the string representation of the parameter value.
+        """
+        value = room.get(parameter)
+
+        if value is None:
+            return "?"
+
+        return "yes" if value else "no"
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected):
         """
         Hook called when a row is selected.
         """
-        if event.row_key.value in ("__empty__", "__error__"):
+        if event.row_key.value.startswith("__"):
             return
 
         self.dismiss(event.row_key.value)
