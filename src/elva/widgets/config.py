@@ -5,22 +5,9 @@
 from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static
+from tomli_w import dumps
 
-
-class Key(Static):
-    """
-    Widget holding a configuration parameter's key.
-    """
-
-    pass
-
-
-class Value(Static):
-    """
-    Widget holding a configuration parameter's value.
-    """
-
-    pass
+from elva.config import Config, convert, deepsort
 
 
 class ConfigView(VerticalScroll):
@@ -33,32 +20,47 @@ class ConfigView(VerticalScroll):
 
     DEFAULT_CSS = """
         ConfigView {
-          layout: grid;
-          grid-size: 2;
-          grid-columns: auto 1fr;
-          grid-gutter: 0 1;
-          height: auto;
+          height: 100%;
         }
         """
     """Default CSS."""
 
-    config = reactive(tuple, recompose=True)
+    config = reactive(Config)
     """
     Configuration parameters alongside their respective values.
 
     This attribute causes a recompose of this widget on being changed.
     """
 
+    def render_config(self):
+        """
+        Render the config in TOML syntax.
+        """
+        area = self.query_one(Static)
+        out = dumps(deepsort(convert(self.config)))
+
+        # ensure literal square brackets, otherwise they get interpreted
+        # as markup
+        area.update(out.replace("[", "\["))
+
     def compose(self):
         """
-        Hook adding child widgets.
+        Generate the widgets to mount.
         """
-        for key, value in self.config:
-            yield Key(str(key))
+        yield Static(id="config")
 
-            # don't rely on the string representation of list items,
-            # get the string conversion individually instead
-            if isinstance(value, list):
-                value = "\n".join(str(v) for v in value)
+    def on_mount(self):
+        """
+        Hook called on mounting.
 
-            yield Value(str(value))
+        Renders the config.
+        """
+        self.render_config()
+
+    def watch_config(self):
+        """
+        Watches for changes on the reactive `config` attribute.
+
+        Renders the config.
+        """
+        self.render_config()

@@ -306,10 +306,8 @@ class App(_App):
         """
         Method pushing the configuration mapping to the active dashboard.
         """
-        config = tuple(self.config.items())
-
         config_view = self.screen.query_one(ConfigView)
-        config_view.config = config
+        config_view.config = self.config
 
     def push_client_states(self):
         """
