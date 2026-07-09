@@ -1,7 +1,6 @@
 from click import command, option
-from click import password_option as secret
 
-from elva.cli import SecretParamType, ask, context, unset
+from elva.cli import context, secret, unset
 
 TRANSLATE = {
     "user": "user",
@@ -9,7 +8,7 @@ TRANSLATE = {
     "secret": "secret",
     "s": "secret",
     "command": "command",
-    "c": "command",
+    "x": "command",
 }
 """
 Table for translation from flag to parameter names.
@@ -24,18 +23,7 @@ Table for translation from flag to parameter names.
     help="Username for authentication.",
 )
 @secret(
-    "--secret",
-    "-s",
-    "secret",
     help="Secret for authentication.",
-    metavar="[SECRET]",
-    prompt_required=False,
-    type=SecretParamType(),
-)
-@option(
-    "--command",
-    "-x",
-    help="The command returning the secret on stdin.",
 )
 @unset(TRANSLATE)
 @context
@@ -47,15 +35,4 @@ def cli(config: dict):
     Arguments:
         config: the merged `basic` config section.
     """
-    # alias
-    c = config
-
-    unset = set(c.get("unset", []))
-
-    if (
-        c.get("command", None)
-        and not c.get("secret", None)
-        and "secret" not in unset
-        and "command" not in unset
-    ):
-        c["secret"] = ask(c["command"])
+    return

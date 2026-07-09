@@ -8,9 +8,8 @@ from typing import Type
 
 from click import ClickException, Context, Parameter, ParamType, command, echo, option
 from click import Path as PathParamType
-from click import password_option as secret
 
-from elva.cli import SecretParamType, ask, context, unset
+from elva.cli import context, secret, unset
 from elva.tls import Check, Mode, Option, Version
 
 TRANSLATE = {
@@ -24,6 +23,10 @@ TRANSLATE = {
     "options": "options",
     "option": "options",
     "o": "options",
+    "secret": "secret",
+    "s": "secret",
+    "command": "command",
+    "x": "command",
 }
 """
 Table for translation from flag to parameter names.
@@ -253,21 +256,10 @@ def show(ctx: Context, param: Parameter, value: Type[Enum], enum: Type[Enum]) ->
     default=None,
 )
 @secret(
-    "--secret",
-    "-s",
-    "secret",
-    metavar="[SECRET]",
     help=(
         "Give the secret for decrypting the private key. "
         "If not given if needed, the built-in OpenSSL mechanism is used."
     ),
-    prompt_required=False,
-    type=SecretParamType(),
-)
-@option(
-    "--command",
-    "-x",
-    help="Set the command returning the secret on stdin.",
 )
 @unset(TRANSLATE)
 @option(
@@ -326,14 +318,3 @@ def cli(config: dict) -> None:
         remove = set(c.pop(f"no_{param}", []))
 
         c[param] = sorted(keep - remove)
-
-    # get the secret from a given command if applicable
-    unset = set(c.get("unset", []))
-
-    if (
-        c.get("command", None)
-        and not c.get("secret", None)
-        and "secret" not in unset
-        and "command" not in unset
-    ):
-        c["secret"] = ask(c["command"])

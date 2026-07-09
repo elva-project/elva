@@ -1,7 +1,16 @@
+from functools import wraps
 from shlex import split
 from subprocess import PIPE, Popen
 
-from click import ClickException, Context, Parameter, ParamType
+from click import (
+    ClickException,
+    Context,
+    Parameter,
+    ParamType,
+    option,
+    pass_context,
+    password_option,
+)
 
 from elva.auth import Password
 
@@ -56,3 +65,59 @@ def ask(command: str) -> Password:
         raise ClickException(stderr)
 
     return Password(stdout.rstrip("\r\n"))
+
+
+def secret(help):
+    def _secret(cmd):
+        """
+        CLI option for adding a secret and a secret command option.
+        """
+
+        @password_option(
+            "--secret",
+            "-s",
+            "secret",
+            help=help,
+            metavar="[SECRET]",
+            prompt_required=False,
+            type=SecretParamType(),
+        )
+        @option(
+            "--command",
+            "-x",
+            help="The command returning the secret on stdin.",
+        )
+        # wrap it to get all CLI parameters defined in `cmd`
+        @wraps(cmd)
+        # pass context to save altered parameters into
+        @pass_context
+        def __secret(ctx, **config):
+            """
+            Decorated command wrapper setting up a secret.
+
+            Arguments:
+                ctx: the CLI context.
+                config: all CLI option parameter names and their values.
+
+            Returns:
+                the return value of the wrapped command.
+            """
+            c = config
+
+            unset = c.get("unset", [])
+
+            if (
+                c.get("command", None)
+                and not c.get("secret", None)
+                and "secret" not in unset
+                and "command" not in unset
+            ):
+                # write that to the context as this is the only way to
+                # pass that info
+                ctx.params["secret"] = ask(c["command"])
+
+            return cmd()
+
+        return __secret
+
+    return _secret
