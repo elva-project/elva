@@ -12,7 +12,7 @@ from click import (
     password_option,
 )
 
-from elva.auth import Password
+from elva.auth import Secret
 
 
 class SecretParamType(ParamType):
@@ -24,10 +24,10 @@ class SecretParamType(ParamType):
 
     def convert(
         self,
-        value: Password | str | None,
+        value: Secret | str | None,
         param: Parameter,
         ctx: Context,
-    ) -> Password:
+    ) -> Secret:
         """
         Convert the parsed CLI value to a secret.
 
@@ -37,15 +37,15 @@ class SecretParamType(ParamType):
             ctx: the context of the current invokation.
 
         Returns:
-            the value in the `Password` wrapper or `None`.
+            the value in the `Secret` wrapper or `None`.
         """
-        if isinstance(value, Password) or value is None:
+        if isinstance(value, Secret) or value is None:
             return value
 
-        return Password(value)
+        return Secret(value)
 
 
-def ask(command: str) -> Password:
+def ask(command: str) -> Secret:
     """
     Run the command returning the secret for authentication on stdin.
 
@@ -53,7 +53,7 @@ def ask(command: str) -> Password:
         command: the command to run.
 
     Returns:
-        the password with the stripped stdout content as value.
+        the secret with the stripped stdout content as value.
     """
     args = split(command)
 
@@ -64,7 +64,7 @@ def ask(command: str) -> Password:
     if stderr:
         raise ClickException(stderr)
 
-    return Password(stdout.rstrip("\r\n"))
+    return Secret(stdout.rstrip("\r\n"))
 
 
 def secret(help):

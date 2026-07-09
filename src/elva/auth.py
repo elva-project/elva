@@ -8,26 +8,26 @@ from base64 import b64encode
 from elva.log import LOGGER_NAME
 
 
-class Password:
+class Secret:
     """
-    A container which stores a password behind an attribute and redacts its value.
+    A container which stores a secret behind an attribute and redacts its value.
 
     The purpose of this class is two-fold:
-    A password's value needs to be requested explicitely and
+    A secret's value needs to be requested explicitely and
     accidential leaking via printing and logging is prevented.
     """
 
     value: str
-    """The actual password."""
+    """The actual secret."""
 
     redact: str
-    """The string to mask the password."""
+    """The string to mask the secret."""
 
     def __init__(self, value: str, redact: str = "REDACTED"):
         """
         Arguments:
-            value: the actual password.
-            redact: the string to mask the password.
+            value: the actual secret.
+            redact: the string to mask the secret.
         """
         self.value = value
         self.redact = redact
@@ -37,7 +37,7 @@ class Password:
         The string conversion of this object.
 
         Returns:
-            the value of the [`redact`][elva.auth.Password.redact] attribute.
+            the value of the [`redact`][elva.auth.Secret.redact] attribute.
         """
         return self.redact
 
@@ -46,7 +46,16 @@ class Password:
         The string representation of this object.
 
         Returns:
-            the value of the [`redact`][elva.auth.Password.redact] attribute.
+            the value of the [`redact`][elva.auth.Secret.redact] attribute.
+        """
+        return self.redact
+
+    def __format__(self) -> str:
+        """
+        The string format representation of this object.
+
+        Returns:
+            the value of the [`redact`][elva.auth.Secret.redact] attribute.
         """
         return self.redact
 
