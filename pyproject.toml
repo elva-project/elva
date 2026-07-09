@@ -76,6 +76,7 @@ dependencies = [
     "tomli-w",
     "tomli",
     "deepmerge",
+    "cryptography>=49.0.0",
 ]
 
 

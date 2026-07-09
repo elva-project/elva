@@ -167,6 +167,7 @@ class App(_App):
                 visible=c.get("room.visible"),
                 persistent=c.get("room.persistent"),
                 permanent=c.get("room.permanent"),
+                secret=c.get("connect.secret"),
                 on_exception=self.on_provider_exception,
             )
 

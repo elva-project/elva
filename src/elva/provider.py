@@ -8,10 +8,12 @@ from typing import Any, Awaitable, Callable, Literal
 from urllib.parse import urlencode, urlunparse
 
 from anyio import CancelScope, WouldBlock, create_memory_object_stream
+from cryptography.fernet import InvalidToken
 from pycrdt import Doc, Subscription, TransactionEvent
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
+from elva.auth import Secret, fernet
 from elva.awareness import Awareness
 from elva.component import Component, create_component_state
 from elva.core import update_port
@@ -71,6 +73,7 @@ class WebsocketProvider(Component):
         persistent: bool | None = None,
         permanent: bool | None = None,
         tls_config: dict = {},
+        secret: Secret | None = None,
         **kwargs: dict[Any],
     ):
         """
@@ -81,6 +84,7 @@ class WebsocketProvider(Component):
             port: port of the Y Document synchronizing websocket server.
             client_type: client type identifier for server logging (default: "elva").
             on_exception: callback to which the current connection exception and a reference to the connection option mapping is given.
+            secret: the secret to use for symmetric encryption of messages.
             *args: positional arguments passed to [`connect`][websockets.asyncio.client.connect].
             **kwargs: keyword arguments passed to [`connect`][websockets.asyncio.client.connect].
         """
@@ -118,6 +122,9 @@ class WebsocketProvider(Component):
 
         # pass the TLS context to `websockets.connect`
         kwargs["ssl"] = tls
+
+        # symmetric message encryption
+        self.fernet = None if secret is None else fernet(secret)
 
         self._signature = signature(connect).bind(uri, *args, **kwargs)
         self.options = self._signature.arguments
@@ -308,8 +315,12 @@ class WebsocketProvider(Component):
         self.log.info("listening for outgoing data")
         try:
             async for message in self._buffer_out:
+                if self.fernet is not None:
+                    message = self.fernet.encrypt(message)
+
                 await self._connection.send(message)
-                self.log.debug(f"sent message {message}")
+                self.log.debug("sent message")
+
         except ConnectionClosed:
             pass
 
@@ -321,7 +332,14 @@ class WebsocketProvider(Component):
         self.log.info("listening for incoming data")
         try:
             async for data in self._connection:
-                self.log.debug(f"received data {data}")
+                self.log.debug("received data")
+
+                if self.fernet is not None:
+                    try:
+                        data = self.fernet.decrypt(data)
+                    except InvalidToken:
+                        continue
+
                 await self._on_recv(data)
         except ConnectionClosed:
             pass
@@ -408,8 +426,8 @@ class WebsocketProvider(Component):
         """
         try:
             message_type, payload, _ = YMessage.infer_and_decode(data)
-        except Exception as exc:
-            self.log.debug(f"failed to infer message: {exc}")
+        except Exception:
+            # ignore any other messages
             return
 
         match message_type:

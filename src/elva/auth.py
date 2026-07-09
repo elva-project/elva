@@ -3,9 +3,16 @@ Module providing authentication utilities.
 """
 
 import logging
-from base64 import b64encode
+from base64 import b64encode, urlsafe_b64encode
+
+from cryptography.fernet import Fernet
 
 from elva.log import LOGGER_NAME
+
+FERNET_KEY_LENGTH = 32
+"""
+The required length in bytes for a Fernet key.
+"""
 
 
 class Secret:
@@ -58,6 +65,30 @@ class Secret:
             the value of the [`redact`][elva.auth.Secret.redact] attribute.
         """
         return self.redact
+
+
+def fernet(secret: Secret) -> Fernet:
+    """
+    Get a Fernet management class from a given secret.
+
+    Arguments:
+        secret: the secret to derive the Fernet key from.
+
+    Returns:
+        the Fernet manager.
+    """
+    bsecret = secret.value.encode()
+
+    if len(bsecret) > FERNET_KEY_LENGTH:
+        ValueError("provided secret must not exceed 32 bytes")
+
+    # initialize Fernet manager with a left-justified secret
+    _fernet = Fernet(urlsafe_b64encode(bsecret.ljust(FERNET_KEY_LENGTH, b"\x00")))
+
+    # clean up
+    del bsecret
+
+    return _fernet
 
 
 def basic_authorization_header(
