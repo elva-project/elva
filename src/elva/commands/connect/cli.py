@@ -40,7 +40,7 @@ Table for translation from flag to parameter names.
     "identifier",
     help="Unique identifier of the shared document.",
 )
-@secret(help="Give the secret for symmetric encryption of messsages.")
+@secret(help="Give the secret for symmetric encryption of messages.")
 @unset(TRANSLATE)
 @context
 def cli(config: dict) -> None:
