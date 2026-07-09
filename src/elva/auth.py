@@ -57,15 +57,6 @@ class Secret:
         """
         return self.redact
 
-    def __format__(self) -> str:
-        """
-        The string format representation of this object.
-
-        Returns:
-            the value of the [`redact`][elva.auth.Secret.redact] attribute.
-        """
-        return self.redact
-
 
 def fernet(secret: Secret) -> Fernet:
     """

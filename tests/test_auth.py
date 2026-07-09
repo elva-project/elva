@@ -1,49 +1,49 @@
 import pytest
 
-from elva.auth import Auth, DummyAuth, Password
+from elva.auth import Auth, DummyAuth, Secret
 
 # use AnyIO pytest plugin
 pytestmark = pytest.mark.anyio
 
 
-def test_password():
+def test_wrapper():
     """
-    The `Password` container redacts a password on string conversion
+    The `Secret` container redacts a wrapper on string conversion
     and in its string representiation.
     """
     # setup
     secret = "s3cR3t!"
-    password = Password(secret)
+    wrapper = Secret(secret)
 
     # calls `__str__` method
-    assert str(password) != secret
-    assert str(password) == password.redact
+    assert str(wrapper) != secret
+    assert str(wrapper) == wrapper.redact
 
     # calls `__repr__` method
-    assert repr(password) != secret
-    assert repr(password) == password.redact
+    assert repr(wrapper) != secret
+    assert repr(wrapper) == wrapper.redact
 
     # calls `__repr__` method implicitely
-    assert f"{password}" != secret
-    assert f"{password}" == password.redact
+    assert f"{wrapper}" != secret
+    assert f"{wrapper}" == wrapper.redact
 
     # we need to request the value explicitely
-    assert password.value == secret
+    assert wrapper.value == secret
 
-    # we can change the password value via attribute
+    # we can change the wrapper value via attribute
     new_secret = "1234"  # never ever do this
-    password.value = new_secret
-    assert password.value == new_secret
+    wrapper.value = new_secret
+    assert wrapper.value == new_secret
 
     # we can change the redact string
     # via the `redact` attribute
     new_redact = "∙∙∙∙∙"  # Bullet Operator U+2219, BMP
-    password.redact = new_redact
-    str(password) == new_redact
+    wrapper.redact = new_redact
+    str(wrapper) == new_redact
 
     # on initialization
-    new_password = Password("foo", redact=new_redact)
-    str(new_password) == new_redact
+    new_wrapper = Secret("foo", redact=new_redact)
+    str(new_wrapper) == new_redact
 
 
 def test_auth_class():
