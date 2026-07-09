@@ -95,7 +95,7 @@ class RoomBrowserScreen(Screen):
         """
         table = DataTable(id="room-table")
         table.cursor_type = "row"
-        table.add_columns("Room", "Clients", "Persistent", "Permanent")
+        table.add_columns("Room", "Clients", "Secret", "Persistent", "Permanent")
         yield table
 
     async def on_mount(self):
@@ -114,16 +114,17 @@ class RoomBrowserScreen(Screen):
         try:
             rooms = fetch_rooms(self.host, self.port)
         except Exception as exc:
-            table.add_row(f"error: {exc}", "", "", "", key="__error__")
+            table.add_row(f"error: {exc}", "", "", "", "", key="__error__")
             return
 
         if not rooms:
-            table.add_row("(no rooms found)", "", "", "", key="__empty__")
+            table.add_row("(no rooms found)", "", "", "", "", key="__empty__")
         else:
             for r, room in enumerate(rooms):
                 table.add_row(
                     room.get("identifier", "?"),
                     str(room.get("clients", "?")),
+                    self.get_parameter_value(room, "secret"),
                     self.get_parameter_value(room, "persistent"),
                     self.get_parameter_value(room, "permanent"),
                     key=room.get("identifier", f"__{r}__"),
