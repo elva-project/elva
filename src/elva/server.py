@@ -297,6 +297,12 @@ class Room(Component):
     flags: RoomFlag
     """Flags controlling the behavior of the room."""
 
+    first_message: bool
+    """`True` if a message has been received, else `False`."""
+
+    secret: bool
+    """`True` if the room is considered to be secret, else `False`."""
+
     clients: set[ServerConnection]
     """Set of active connections."""
 
@@ -342,6 +348,9 @@ class Room(Component):
 
             if path is not None and RoomFlag.PERMANENT in flags:
                 self.store = SQLiteStore(self.ydoc, self.path)
+
+        self.first_message = True
+        self.secret = False
 
     @property
     def states(self) -> RoomState:
@@ -436,6 +445,12 @@ class Room(Component):
             try:
                 message_type, payload, _ = YMessage.infer_and_decode(data)
             except ValueError:
+                # disable persistence or simply ignore
+                await self.disable_persistence()
+
+                # first message received
+                self.first_message = False
+
                 return
 
             match message_type:
@@ -448,6 +463,31 @@ class Room(Component):
         else:
             # simply forward incoming messages to all other clients
             self.broadcast(data, client)
+
+        # first message received
+        self.first_message = False
+
+    async def disable_persistence(self) -> None:
+        """
+        On a parsing error of the very first message,
+        remove the `PERSISTENT` room flag and stop the store if present.
+        Be a no-op for all other messages.
+        """
+        if not self.first_message:
+            # just ignore erroneous messages mid-way
+            return
+
+        # remove the persistence flag for the next check
+        self.flags &= ~RoomFlag.PERSISTENT
+
+        # stop the store if running any
+        if hasattr(self, "store"):
+            await self.store.stop()
+
+        # the first message received is garbled, so considered to be encrypted
+        self.secret = True
+
+        self.log.info(f"disabled persistence for room '{self.identifier}'")
 
     async def process_sync_step1(self, state: bytes, client: ServerConnection):
         """
@@ -507,6 +547,7 @@ class Room(Component):
             clients=len(self.clients),
             persistent=RoomFlag.PERSISTENT in self.flags,
             permanent=RoomFlag.PERMANENT in self.flags,
+            secret=self.secret,
         )
 
 

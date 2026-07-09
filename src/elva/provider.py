@@ -438,9 +438,8 @@ class WebsocketProvider(Component):
             case YMessage.AWARENESS:
                 await self._on_awareness(payload)
             case _:
-                self.log.warning(
-                    f"message type '{message_type}' does not match any YMessage"
-                )
+                # ignore unknown messages
+                return
 
     async def _on_sync_step1(self, state: bytes):
         """
