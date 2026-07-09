@@ -6,12 +6,18 @@ import logging
 from base64 import b64encode, urlsafe_b64encode
 
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
 
 from elva.log import LOGGER_NAME
 
 FERNET_KEY_LENGTH = 32
 """
 The required length in bytes for a Fernet key.
+"""
+
+ARGON2ID_SALT_LENGTH = 8
+"""
+Minimal salt length for the `Argon2id` key derivation function.
 """
 
 
@@ -68,18 +74,19 @@ def fernet(secret: Secret) -> Fernet:
     Returns:
         the Fernet manager.
     """
-    bsecret = secret.value.encode()
+    # define a key derivation function
+    kdf = Argon2id(
+        # fix the salt so the secret can be used on other machines
+        # to derive the same encryption/decryption key
+        salt=ARGON2ID_SALT_LENGTH * b"\x00",
+        length=FERNET_KEY_LENGTH,
+        iterations=3,
+        lanes=4,
+        memory_cost=2**16,
+    )
 
-    if len(bsecret) > FERNET_KEY_LENGTH:
-        ValueError("provided secret must not exceed 32 bytes")
-
-    # initialize Fernet manager with a left-justified secret
-    _fernet = Fernet(urlsafe_b64encode(bsecret.ljust(FERNET_KEY_LENGTH, b"\x00")))
-
-    # clean up
-    del bsecret
-
-    return _fernet
+    # initialize Fernet manager
+    return Fernet(urlsafe_b64encode(kdf.derive(secret.value.encode())))
 
 
 def basic_authorization_header(
