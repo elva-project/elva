@@ -41,7 +41,7 @@ class ConfigView(VerticalScroll):
 
         # ensure literal square brackets, otherwise they get interpreted
         # as markup
-        area.update(out.replace("[", "\["))
+        area.update(out.replace("[", "\\["))
 
     def compose(self):
         """
