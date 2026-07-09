@@ -1,6 +1,6 @@
 from click import INT, command, option
 
-from elva.cli import context, unset
+from elva.cli import context, secret, unset
 
 TRANSLATE = {
     "host": "host",
@@ -9,6 +9,10 @@ TRANSLATE = {
     "p": "port",
     "identifier": "identifier",
     "i": "identifier",
+    "secret": "secret",
+    "s": "secret",
+    "command": "command",
+    "x": "command",
 }
 """
 Table for translation from flag to parameter names.
@@ -36,6 +40,7 @@ Table for translation from flag to parameter names.
     "identifier",
     help="Unique identifier of the shared document.",
 )
+@secret(help="Give the secret for symmetric encryption of messsages.")
 @unset(TRANSLATE)
 @context
 def cli(config: dict) -> None:
