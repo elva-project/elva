@@ -77,7 +77,7 @@ def test_fernet() -> None:
         b"",
         b"secret",
         "🙈".encode(),
-    )
+    ),
 )
 def test_remote_fernet(message: bytes) -> None:
     """

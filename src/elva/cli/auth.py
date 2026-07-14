@@ -1,6 +1,8 @@
 from functools import wraps
+from os import linesep
 from shlex import split
 from subprocess import PIPE, Popen
+from typing import Any, Callable
 
 from click import (
     ClickException,
@@ -47,7 +49,7 @@ class SecretParamType(ParamType):
 
 def ask(command: str) -> Secret:
     """
-    Run the command returning the secret for authentication on stdin.
+    Run the command returning the secret for authentication on stdout.
 
     Arguments:
         command: the command to run.
@@ -61,16 +63,36 @@ def ask(command: str) -> Secret:
 
     stdout, stderr = process.communicate()
 
-    if stderr:
-        raise ClickException(stderr)
+    if rc := process.returncode:
+        raise ClickException(
+            f"command '{command}' exited with return code {rc}:{linesep}{stderr}"
+        )
 
     return Secret(stdout.rstrip("\r\n"))
 
 
-def secret(help):
-    def _secret(cmd):
+def secret(help: str) -> Callable:
+    """
+    Configuration routine for a CLI secret and secret command option decorator.
+
+    Arguments:
+        help: the help string of the `-s, --secret` option.
+
+    Returns:
+        the decorator adding the secret and secret command CLI options.
+    """
+    if callable(help):
+        raise ValueError("used as decorator, but expected a help string")
+
+    def _secret(cmd: Callable) -> Callable:
         """
-        CLI option for adding a secret and a secret command option.
+        CLI option decorator for adding a secret and a secret command option.
+
+        Arguments:
+            cmd: the callable to decorate with the secret and command option.
+
+        Returns:
+            the decorated callable.
         """
 
         @password_option(
@@ -91,7 +113,7 @@ def secret(help):
         @wraps(cmd)
         # pass context to save altered parameters into
         @pass_context
-        def __secret(ctx, **config):
+        def __secret(ctx: Context, **config: Any) -> Any:
             """
             Decorated command wrapper setting up a secret.
 
@@ -106,6 +128,7 @@ def secret(help):
 
             unset = c.get("unset", [])
 
+            # retrieve the secret from a given secret command
             if (
                 c.get("command", None)
                 and not c.get("secret", None)
@@ -114,9 +137,9 @@ def secret(help):
             ):
                 # write that to the context as this is the only way to
                 # pass that info
-                ctx.params["secret"] = ask(c["command"])
+                c["secret"] = ctx.params["secret"] = ask(c["command"])
 
-            return cmd()
+            return cmd(**config)
 
         return __secret
 
