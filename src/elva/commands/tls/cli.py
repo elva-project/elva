@@ -6,31 +6,11 @@ from os import linesep
 from pathlib import Path
 from typing import Type
 
-from click import ClickException, Context, Parameter, ParamType, command, echo, option
+from click import ClickException, Context, Parameter, ParamType, echo, option
 from click import Path as PathParamType
 
-from elva.cli import context, secret, unset
+from elva.cli import command, secret
 from elva.tls import Check, Mode, Option, Version
-
-TRANSLATE = {
-    "on": "on",
-    "off": "on",
-    "mode": "mode",
-    "m": "mode",
-    "checks": "checks",
-    "check": "checks",
-    "c": "checks",
-    "options": "options",
-    "option": "options",
-    "o": "options",
-    "secret": "secret",
-    "s": "secret",
-    "command": "command",
-    "x": "command",
-}
-"""
-Table for translation from flag to parameter names.
-"""
 
 
 def choices(enum: Type[Enum]) -> list[str]:
@@ -261,7 +241,6 @@ def show(ctx: Context, param: Parameter, value: Type[Enum], enum: Type[Enum]) ->
         "If not given if needed, the built-in OpenSSL mechanism is used."
     ),
 )
-@unset(TRANSLATE)
 @option(
     "--versions",
     "show_versions",
@@ -294,7 +273,6 @@ def show(ctx: Context, param: Parameter, value: Type[Enum], enum: Type[Enum]) ->
     help="Show available options and exit.",
     callback=partial(show, enum=Option),
 )
-@context
 def cli(config: dict) -> None:
     """
     Configure TLS.

@@ -82,7 +82,7 @@ def secret(help: str) -> Callable:
         the decorator adding the secret and secret command CLI options.
     """
     if callable(help):
-        raise ValueError("used as decorator, but expected a help string")
+        raise ValueError("used as a decorator, but expected a help string")
 
     def _secret(cmd: Callable) -> Callable:
         """

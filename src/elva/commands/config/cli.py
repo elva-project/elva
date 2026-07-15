@@ -1,31 +1,9 @@
 from pathlib import Path
 
 from click import Path as PathParamType
-from click import command, option
+from click import option
 
-from elva.cli import context, unset
-
-TRANSLATE = {
-    "defaults": "defaults",
-    "include": "defaults",
-    "i": "defaults",
-    "exclude": "defaults",
-    "x": "defaults",
-    "files": "files",
-    "file": "files",
-    "f": "files",
-    "dump": "dump",
-    "d": "dump",
-    "no-dump": "dump",
-    "nd": "dump",
-    "replace": "replace",
-    "r": "replace",
-    "merge": "replace",
-    "m": "replace",
-}
-"""
-Table for translations from flag to parameter names.
-"""
+from elva.cli import command
 
 
 @command(name="config")
@@ -68,8 +46,6 @@ Table for translations from flag to parameter names.
     help="Merge or replace metadata config with collected config.",
     default=None,
 )
-@unset(TRANSLATE)
-@context
 def cli(config: dict) -> None:
     """
     Configure config files.

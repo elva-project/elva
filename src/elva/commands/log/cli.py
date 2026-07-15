@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from click import Context, IntRange, Parameter, command, option
+from click import Context, IntRange, Parameter, option
 from click import Path as PathParameter
 
-from elva.cli import context, unset
+from elva.cli import command
 from elva.log import LogLevel
 
 LEVEL = [
@@ -57,19 +57,6 @@ class LogLevelRange(IntRange):
             return LogLevel[value]
 
 
-TRANSLATE = {
-    "verbose": "level",
-    "v": "level",
-    "quiet": "quiet",
-    "q": "quiet",
-    "file": "file",
-    "f": "file",
-}
-"""
-Table for translations from flag to parameter names.
-"""
-
-
 @command(name="log")
 @option(
     "--verbose",
@@ -104,8 +91,6 @@ Table for translations from flag to parameter names.
         allow_dash=False,
     ),
 )
-@unset(TRANSLATE)
-@context
 def cli(config: dict) -> None:
     """
     Configure logging.

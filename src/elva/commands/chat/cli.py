@@ -6,23 +6,11 @@ from importlib import import_module as import_
 from logging import FileHandler, getLogger
 from typing import Callable
 
-from click import command, option
+from click import option
 
-from elva.cli import context, data, unset
+from elva.cli import command, data
 from elva.config import Config
 from elva.log import LOGGER_NAME, DefaultFormatter
-
-TRANSLATIONS = {
-    "self": "self",
-    "s": "self",
-    "no-self": "self",
-    "ns": "self",
-    "file": "data",
-    "f": "data",
-}
-"""
-Table for translation from flag to parameter names.
-"""
 
 
 def run(config: Config) -> None:
@@ -66,8 +54,6 @@ def run(config: Config) -> None:
     default=None,
 )
 @data
-@unset(TRANSLATIONS)
-@context
 def cli(config: Config) -> Callable:
     """
     Send messages with real-time preview.

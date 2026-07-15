@@ -1,18 +1,6 @@
-from click import command, option
+from click import option
 
-from elva.cli import context, secret, unset
-
-TRANSLATE = {
-    "user": "user",
-    "u": "user",
-    "secret": "secret",
-    "s": "secret",
-    "command": "command",
-    "x": "command",
-}
-"""
-Table for translation from flag to parameter names.
-"""
+from elva.cli import command, secret
 
 
 @command(name="basic")
@@ -25,8 +13,6 @@ Table for translation from flag to parameter names.
 @secret(
     help="Secret for authentication.",
 )
-@unset(TRANSLATE)
-@context
 def cli(config: dict):
     """
     Configure Basic Authentication.

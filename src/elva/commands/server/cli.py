@@ -7,32 +7,13 @@ from importlib import import_module as import_
 from logging import INFO, FileHandler, StreamHandler, getLogger
 from pathlib import Path
 
-from click import INT, Choice, UsageError, command, option
+from click import INT, Choice, UsageError, option
 from click import Path as PathParamType
 
-from elva.cli import context, unset
+from elva.cli import command
 from elva.config import Config
 from elva.log import LOGGER_NAME, DefaultFormatter
 from elva.server import FlagPolicy
-
-TRANSLATIONS = {
-    "host": "host",
-    "h": "host",
-    "port": "port",
-    "p": "port",
-    "visible": "visible",
-    "v": "visible",
-    "persistent": "persistent",
-    "r": "persistent",
-    "permanent": "permanent",
-    "s": "permanent",
-    "path": "path",
-    "d": "path",
-    "dummy": "dummy",
-}
-"""
-Table for translation from flag to parameter names.
-"""
 
 
 def run(config: Config) -> None:
@@ -141,8 +122,6 @@ def run(config: Config) -> None:
     is_flag=True,
     default=None,
 )
-@unset(TRANSLATIONS)
-@context
 def cli(config: dict) -> None:
     """
     Run a WebSocket server.

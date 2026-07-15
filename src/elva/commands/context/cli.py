@@ -1,19 +1,9 @@
-from click import command, echo, option
+from click import echo, option
 from tomli_w import dumps
 
-from elva.cli import context, data, unset
+from elva.cli import command, data
 from elva.config import Config, convert, deepsort
 from elva.files import Metadata
-
-TRANSLATIONS = {
-    "config": "config",
-    "c": "config",
-    "file": "data",
-    "f": "data",
-}
-"""
-Table for translation from flag to parameter names.
-"""
 
 
 def run(config: Config) -> None:
@@ -55,8 +45,6 @@ def run(config: Config) -> None:
     help="Show config parameters as well.",
 )
 @data
-@unset(TRANSLATIONS)
-@context
 def cli(config: dict) -> None:
     """
     Print the parameters passed to apps and other subcommands.

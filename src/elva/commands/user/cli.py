@@ -1,21 +1,9 @@
 from random import randint
 from uuid import uuid4
 
-from click import Choice, command, option
+from click import Choice, option
 
-from elva.cli import context, unset
-
-TRANSLATE = {
-    "identifier": "identifier",
-    "i": "identifier",
-    "name": "name",
-    "n": "name",
-    "color": "color",
-    "c": "color",
-}
-"""
-Table for translation from flag to parameter names.
-"""
+from elva.cli import command
 
 
 class RandomParameter:
@@ -80,8 +68,6 @@ class RandomParameter:
     help="Randomize an option.",
     type=Choice(("identifier", "color")),
 )
-@unset(TRANSLATE)
-@context
 def cli(config: dict) -> None:
     """
     Configure user details.

@@ -282,12 +282,6 @@ def alter(config: Config, ctxs: dict[str, Context]) -> None | Callable:
 
             app = ctx.alter(section)
 
-            # remove all parameters to be unset from this config section
-            unset = set(section.pop("unset", []))
-
-            for param in unset:
-                section.pop(param, None)
-
     return app
 
 

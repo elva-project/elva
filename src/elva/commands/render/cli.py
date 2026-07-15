@@ -1,23 +1,9 @@
 from pathlib import Path
 
-from click import IntRange, command, option
+from click import IntRange, option
 from click import Path as PathParamType
 
-from elva.cli import context, unset
-
-TRANSLATE = {
-    "auto": "auto",
-    "a": "auto",
-    "manual": "auto",
-    "m": "auto",
-    "timeout": "timeout",
-    "t": "timeout",
-    "file": "file",
-    "f": "file",
-}
-"""
-Table for translations from flag to parameter name.
-"""
+from elva.cli import command
 
 
 @command(name="render")
@@ -52,8 +38,6 @@ Table for translations from flag to parameter name.
         allow_dash=False,
     ),
 )
-@unset(TRANSLATE)
-@context
 def cli(config: dict) -> None:
     """
     Configure file rendering.

@@ -1,22 +1,6 @@
-from click import INT, command, option
+from click import INT, option
 
-from elva.cli import context, secret, unset
-
-TRANSLATE = {
-    "host": "host",
-    "h": "host",
-    "port": "port",
-    "p": "port",
-    "identifier": "identifier",
-    "i": "identifier",
-    "secret": "secret",
-    "s": "secret",
-    "command": "command",
-    "x": "command",
-}
-"""
-Table for translation from flag to parameter names.
-"""
+from elva.cli import command, secret
 
 
 @command(name="connect")
@@ -41,8 +25,6 @@ Table for translation from flag to parameter names.
     help="Unique identifier of the shared document.",
 )
 @secret(help="Give the secret for symmetric encryption of messages.")
-@unset(TRANSLATE)
-@context
 def cli(config: dict) -> None:
     """
     Configure connection details.
