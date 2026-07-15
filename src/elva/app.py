@@ -100,6 +100,9 @@ class App(_App):
         """
         Wait for a component to stop.
         """
+        if component.state == component.states.NONE:
+            return
+
         sub = component.subscribe()
 
         async for _ in sub:
