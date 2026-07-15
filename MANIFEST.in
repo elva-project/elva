@@ -1,1 +1,1 @@
-include src/elva/**/*.tcss
+include src/elva/commands/**/*.tcss
