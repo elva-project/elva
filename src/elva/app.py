@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Generator, Literal
 
+from anyio import create_task_group
 from textual import work
 from textual.app import App as _App
 from textual.binding import Binding
@@ -8,6 +9,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header
 from websockets.exceptions import InvalidStatus, WebSocketException
 
+from elva.component import Component
 from elva.config import Config
 from elva.files import get_data_file_path, get_render_file_path
 from elva.provider import WebsocketProvider
@@ -94,11 +96,25 @@ class App(_App):
         yield Header(show_clock=False, icon="")
         yield Footer()
 
+    async def wait_for_component(self, component: Component):
+        """
+        Wait for a component to stop.
+        """
+        sub = component.subscribe()
+
+        async for _ in sub:
+            if component.state == component.states.NONE:
+                component.unsubscribe(sub)
+                return
+
     async def on_unmount(self):
         """
         Hook called on unmounting the app.
         """
-        await self.workers.wait_for_complete()
+        async with create_task_group() as tg:
+            for attr in ("provider", "store", "renderer"):
+                if (component := getattr(self, attr, None)) is not None:
+                    tg.start_soon(self.wait_for_component, component)
 
     def set_ydoc(self):
         """
