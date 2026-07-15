@@ -15,6 +15,7 @@ from click import (
 )
 
 from elva.auth import Secret
+from elva.config import Config
 
 
 class SecretParamType(ParamType):
@@ -113,18 +114,20 @@ def secret(help: str) -> Callable:
         @wraps(cmd)
         # pass context to save altered parameters into
         @pass_context
-        def __secret(ctx: Context, **config: Any) -> Any:
+        def __secret(ctx: Context, *args: Config, **kwargs: Any) -> Any:
             """
             Decorated command wrapper setting up a secret.
 
             Arguments:
                 ctx: the CLI context.
-                config: all CLI option parameter names and their values.
+                args: positional arguments holding the ELVA config if given.
+                kwargs: keyword arguments with CLI option parameter names and their values.
 
             Returns:
                 the return value of the wrapped command.
             """
-            c = config
+            # select the appropriate object holding the parameters
+            c = kwargs or args[0]
 
             unset = c.get("unset", [])
 
@@ -139,7 +142,7 @@ def secret(help: str) -> Callable:
                 # pass that info
                 c["secret"] = ctx.params["secret"] = ask(c["command"])
 
-            return cmd(**config)
+            return cmd(*args, **kwargs)
 
         return __secret
 
