@@ -60,7 +60,6 @@ def test_secret_fail() -> None:
             Arguments:
                 kwargs: keyword arguments holding the parsed secret and command.
             """
-            return
 
 
 @parametrize(
