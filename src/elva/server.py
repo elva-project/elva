@@ -35,6 +35,7 @@ from elva.core import update_port
 from elva.protocol import YMessage
 from elva.store import SQLiteStore
 from elva.tls import client, server
+from elva.config import Config
 
 
 class FlagPolicy(Enum):
@@ -333,24 +334,58 @@ class Room(Component):
             flags: flags controlling the behavior of the room.
         """
         self.identifier = identifier
+        self.flags = flags
+        self.clients = set()
+
+        if RoomFlag.PERMANENT in flags:
+            # permanence implies persistence
+            flags |= RoomFlag.PERSISTENT
 
         if path is not None:
             self.path = path / f"{identifier}.y"
+
+            if self.path.exists():
+                # ensure flags
+                self.flags = flags | RoomFlag.PERSISTENT | RoomFlag.PERMANENT
         else:
             self.path = None
 
-        self.flags = flags
+        # set flags for `secret` indication
+        self.first_message = True
+        self.secret = False
 
-        self.clients = set()
-
-        if RoomFlag.PERSISTENT in flags:
+        if RoomFlag.PERSISTENT:
             self.ydoc = Doc()
 
             if path is not None and RoomFlag.PERMANENT in flags:
+                # check for existence of data file before the store starts and creates one
+                exists = self.path.exists()
+
                 self.store = SQLiteStore(self.ydoc, self.path)
 
-        self.first_message = True
-        self.secret = False
+                # update visibility
+                if exists:
+                    # since something was stored, there had been a first message already
+                    self.first_message = False
+
+                    config = self.store.get_config()
+
+                    if config.get("room.visible", False):
+                        self.flags |= RoomFlag.VISIBLE
+                    else:
+                        self.flags &= ~RoomFlag.VISIBLE
+
+                # ensure presence of config
+                self.store.set_config(
+                    Config({
+                        "room": {
+                            "visible": RoomFlag.VISIBLE in self.flags,
+                        }
+                    })
+                )
+
+        # report the flags of the room
+        self.log.info(f"room '{self.identifier}' is {", ".join(flag.name.lower() for flag in self.flags)}")
 
     @property
     def states(self) -> RoomState:
@@ -482,12 +517,16 @@ class Room(Component):
 
         # stop the store if running any
         if hasattr(self, "store"):
+            # delete the created data file again
+            self.store.path.unlink()
+
+            # stop the store
             await self.store.stop()
 
         # the first message received is garbled, so considered to be encrypted
         self.secret = True
 
-        self.log.info(f"disabled persistence for room '{self.identifier}'")
+        self.log.info(f"disabled persistence and permanence for room '{self.identifier}'")
 
     async def process_sync_step1(self, state: bytes, client: ServerConnection):
         """
@@ -662,15 +701,6 @@ class WebsocketServer(Component):
         ):
             self._change_state(self.states.NONE, self.states.SERVING)
 
-            if self.persistent:
-                if self.path is None:
-                    location = "volatile memory"
-                else:
-                    location = self.path
-                self.log.info(f"storing content in {location}")
-            else:
-                self.log.info("broadcast only and no content will be stored")
-
             for prop, value in (
                 ("visibility", self.visible),
                 ("persistence", self.persistent),
@@ -811,9 +841,6 @@ class WebsocketServer(Component):
         value = self.extract_flag(name, query)
 
         out = self.update_flag(policy, value=value)
-
-        negate = "" if out else "not"
-        self.log.info(f"set room {negate} to be {name}".replace("  ", " "))
 
         return out
 
