@@ -299,10 +299,6 @@ class UI(App):
         self.ydoc["history"] = self.history = Array()
         self.ydoc["future"] = self.future = Map()
 
-        self.message, self.ytext, _ = self.get_message("")
-
-        self.future[self.config["user.identifier"]] = self.message
-
     def set_defaults(self):
         fallback_id = self.get_new_id()
 
@@ -368,6 +364,11 @@ class UI(App):
         Custom reload logic.
         """
         self.set_defaults()
+
+        self.message, self.ytext, _ = self.get_message("")
+
+        self.future[self.config["user.identifier"]] = self.message
+
 
     def compose(self):
         """
