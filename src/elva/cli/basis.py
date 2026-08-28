@@ -155,7 +155,6 @@ def read_data_file(path: str | Path) -> Config:
             return metadata.get_config()
     except (
         FileNotFoundError,
-        PermissionError,
         DatabaseError,
     ) as exc:
         info(f"Ignoring config in {path}: {exc}")
@@ -181,7 +180,7 @@ def stored(ctxs: dict[str, Context]) -> dict[str, Any]:
     files = list(config.setdefault("files", []))
 
     if defaults:
-        files = find_default_config_paths() + files
+        files += find_default_config_paths()
 
     paths, out = read_config_files(files)
 
