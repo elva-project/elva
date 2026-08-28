@@ -220,6 +220,15 @@ async def test_component_logging():
     # reset LOGGER_NAME; just in case
     LOGGER_NAME.reset(reset_token)
 
+    sub = test_logger.subscribe()
+
+    if test_logger.state != test_logger.states.NONE:
+        async for msg in sub:
+            if test_logger.state == test_logger.states.NONE:
+                test_logger.unsubscribe(sub)
+                break
+
+
 
 async def test_state():
     """The default Component class has a state of `RUNNING` when a task group is running and `NONE` otherwise."""
