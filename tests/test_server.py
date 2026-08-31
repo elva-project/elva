@@ -14,7 +14,12 @@ from websockets.protocol import State as ConnectionState
 
 from elva.auth import Auth, DummyAuth, basic_authorization_header
 from elva.protocol import YMessage
-from elva.server import FlagPolicy, RequestProcessor, WebsocketServer, free_tcp_port
+from elva.server import (
+    FlagPolicy,
+    RequestProcessor,
+    WebsocketServer,
+    free_tcp_port,
+)
 
 ## ANYIO PYTEST PLUGIN
 pytestmark = pytest.mark.anyio
@@ -171,10 +176,8 @@ async def test_websocket_server_no_persistence(free_tcp_port):
     async with WebsocketServer(
         host=LOCALHOST,
         port=free_tcp_port,
-        persistent=FlagPolicy.NEVER,  # the default
     ) as websocket_server:
-        # no storage active
-        assert not hasattr(websocket_server, "store")
+        assert len(websocket_server.rooms) == 0
 
         identifier = str(uuid.uuid4())
 
@@ -186,20 +189,20 @@ async def test_websocket_server_no_persistence(free_tcp_port):
         for _ in range(2):
             clients.append(await connect_websocket_client(uri))
 
-        # unpack
-        client1, client2 = clients
-
         # connect and initialize CRDT synchronization with SYNC STEP 1
         for clienta, clientb in (clients, clients[::-1]):
             msg_out = b"foobar"
-            await client1.send(msg_out)
+            await clienta.send(msg_out)
 
-            msg_in = await client2.recv()
+            msg_in = await clientb.recv()
             assert msg_out == msg_in
 
-            # there is a room now, but without a YDoc
-            assert identifier in websocket_server.rooms
-            assert not hasattr(websocket_server.rooms[identifier], "ydoc")
+        # there is a room now, but without a YDoc
+        assert identifier in websocket_server.rooms
+
+        room = websocket_server.rooms[identifier]
+
+        assert not hasattr(room, "ydoc")
 
 
 async def test_websocket_server_volatile_persistence(free_tcp_port):

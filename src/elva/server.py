@@ -31,11 +31,11 @@ from websockets.datastructures import Headers
 from websockets.http11 import Request, Response
 
 from elva.component import Component, create_component_state
+from elva.config import Config
 from elva.core import update_port
 from elva.protocol import YMessage
 from elva.store import SQLiteStore
 from elva.tls import client, server
-from elva.config import Config
 
 
 class FlagPolicy(Enum):
@@ -337,27 +337,27 @@ class Room(Component):
         self.flags = flags
         self.clients = set()
 
-        if RoomFlag.PERMANENT in flags:
-            # permanence implies persistence
-            flags |= RoomFlag.PERSISTENT
-
         if path is not None:
             self.path = path / f"{identifier}.y"
 
             if self.path.exists():
                 # ensure flags
-                self.flags = flags | RoomFlag.PERSISTENT | RoomFlag.PERMANENT
+                self.flags |= RoomFlag.PERMANENT
         else:
             self.path = None
+
+        if RoomFlag.PERMANENT in self.flags:
+            # permanence implies persistence
+            self.flags |= RoomFlag.PERSISTENT
 
         # set flags for `secret` indication
         self.first_message = True
         self.secret = False
 
-        if RoomFlag.PERSISTENT:
+        if RoomFlag.PERSISTENT in self.flags:
             self.ydoc = Doc()
 
-            if path is not None and RoomFlag.PERMANENT in flags:
+            if path is not None and RoomFlag.PERMANENT in self.flags:
                 # check for existence of data file before the store starts and creates one
                 exists = self.path.exists()
 
@@ -377,15 +377,17 @@ class Room(Component):
 
                 # ensure presence of config
                 self.store.set_config(
-                    Config({
-                        "room": {
-                            "visible": RoomFlag.VISIBLE in self.flags,
+                    Config(
+                        {
+                            "room": {
+                                "visible": RoomFlag.VISIBLE in self.flags,
+                            }
                         }
-                    })
+                    )
                 )
 
         # report the flags of the room
-        self.log.info(f"room '{self.identifier}' is {", ".join(flag.name.lower() for flag in self.flags)}")
+        self.log.info(f"room '{self.identifier}' sets flags {self.flags.name}")
 
     @property
     def states(self) -> RoomState:
@@ -526,7 +528,9 @@ class Room(Component):
         # the first message received is garbled, so considered to be encrypted
         self.secret = True
 
-        self.log.info(f"disabled persistence and permanence for room '{self.identifier}'")
+        self.log.info(
+            f"disabled persistence and permanence for room '{self.identifier}'"
+        )
 
     async def process_sync_step1(self, state: bytes, client: ServerConnection):
         """
