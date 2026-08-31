@@ -153,7 +153,7 @@ async def test_component_logging():
     assert test_logger.log.name == f"{test_logger.__module__}.TestLogger"
 
     # set component logger name
-    reset_token = LOGGER_NAME.set(__name__)
+    LOGGER_NAME.set(__name__)
 
     # prepare expected contents
     test_logger_name = f"{__name__}.TestLogger"
@@ -217,18 +217,6 @@ async def test_component_logging():
             assert expected_line in line
             assert test_logger_name in line
 
-    # reset LOGGER_NAME; just in case
-    LOGGER_NAME.reset(reset_token)
-
-    sub = test_logger.subscribe()
-
-    if test_logger.state != test_logger.states.NONE:
-        async for msg in sub:
-            if test_logger.state == test_logger.states.NONE:
-                test_logger.unsubscribe(sub)
-                break
-
-
 
 async def test_state():
     """The default Component class has a state of `RUNNING` when a task group is running and `NONE` otherwise."""
@@ -251,6 +239,8 @@ async def test_state():
 
     # the component's state is back to only `NONE`, so neither `RUNNING` nor `ACTIVE` anymore
     assert comp.state == ComponentState.NONE
+
+    comp.unsubscribe(sub)
 
 
 async def test_subscription():
@@ -399,6 +389,8 @@ async def test_custom_component_state():
 
     # the component's state is back to just `NONE`
     assert comp.state == CustomState.NONE
+
+    comp.unsubscribe(sub)
 
 
 async def test_close_component():
@@ -560,6 +552,8 @@ async def test_start_stop_methods():
         assert comp.state == states.NONE
         assert comp.buffer == ["before", "run", "cleanup"]
 
+    comp.unsubscribe(sub)
+
 
 async def test_start_stop_methods_concurrent():
     """Components run concurrently."""
@@ -587,6 +581,8 @@ async def test_start_stop_methods_concurrent():
             while states.ACTIVE in comp.state:
                 await sub.receive()
             events.append((i, "cleanup"))
+
+            comp.unsubscribe(sub)
 
     assert buffer == events
 
