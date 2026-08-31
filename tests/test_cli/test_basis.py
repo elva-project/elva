@@ -3,7 +3,7 @@ from pathlib import Path
 from platform import system
 from typing import Callable
 
-from click import Context, get_app_dir, group, Command, command, option
+from click import Context, command, get_app_dir, group, option
 from pytest import mark
 from tomli_w import dump
 
@@ -12,13 +12,13 @@ from elva.cli.basis import (
     find_default_config_paths,
     read_config_files,
     read_data_file,
-    stored,
     split,
+    stored,
 )
+from elva.commands.config import cli as config_command
 from elva.config import Config
 from elva.core import APP_NAME, CONFIG_NAME
 from elva.files import Metadata
-from elva.commands.config import cli as config_command
 
 # alias
 parametrize = mark.parametrize
@@ -281,6 +281,7 @@ def test_read_data_file(tmp_path: Path, setup: Callable, config: dict) -> None:
     # the output from the data file is as expected
     assert read_data_file(path) == Config(config)
 
+
 @parametrize(
     ("configs", "args", "changed", "data"),
     (
@@ -352,7 +353,7 @@ def test_stored(tmp_path, configs, args, changed, data):
     environ["USERPROFILE" if system() == "Windows" else "HOME"] = str(tmp_path)
 
     for config in configs:
-        path = tmp_path / config 
+        path = tmp_path / config
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("wb") as file:
             dump({"name": config}, file)
@@ -361,7 +362,7 @@ def test_stored(tmp_path, configs, args, changed, data):
     ctxs = {"config": config_ctx}
 
     params = config_ctx.params.copy()
-    params.update(changed) 
+    params.update(changed)
     params["files"] = [Path(file).absolute() for file in params["files"]]
 
     expected = {"config": params}
@@ -438,8 +439,7 @@ def test_split(args, default_map, default, given):
     @option("--foo")
     @option("--bar")
     @option("--baz")
-    def cmd(**kwargs):
-        ...
+    def cmd(**kwargs): ...
 
     ctx = cmd.make_context("test", args)
 
