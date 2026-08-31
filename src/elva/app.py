@@ -28,7 +28,6 @@ class App(_App):
 
     SCREENS = {
         "dashboard": Dashboard,
-        "rooms": RoomBrowserScreen,
         "error": ErrorScreen,
         "input": InputScreen,
     }
@@ -39,7 +38,7 @@ class App(_App):
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit"),
         Binding("ctrl+i", "toggle_dashboard", "Dashboard"),
-        Binding("ctrl+r", "browse_rooms", "Rooms"),
+        Binding("ctrl+r", "toggle_rooms", "Rooms"),
         Binding("ctrl+s", "render", "Save Document"),
         Binding("ctrl+shift+s", "save", "Save Yjs", key_display="^S"),
     ]
@@ -80,12 +79,27 @@ class App(_App):
         else:
             self.title = "ELVA"
 
+    def reinstall_room_browser_screen(self):
+        """
+        Ensure a freshly install room browser screen with host and port
+        taken from the given config.
+        """
+        self.uninstall_screen("rooms")
+
+        c = self.config
+
+        host = c.get("connect.host")
+
+        if host is not None:
+            port = c.get("connect.port")
+            self.install_screen(RoomBrowserScreen(host, port), name="rooms")
+
     def on_mount(self) -> None:
         """
         Hook called after composing and before the app is considered mounted.
         """
         if not self.config.get("connect.identifier"):
-            self.action_browse_rooms()
+            self.action_toggle_rooms()
 
     def compose(self) -> Generator[Widget, None, None]:
         """
@@ -136,6 +150,7 @@ class App(_App):
         Reload the app
         """
         # required
+        self.reinstall_room_browser_screen()
         self.set_title()
         self.set_ydoc()
 
@@ -275,7 +290,7 @@ class App(_App):
             self.push_client_states()
 
     @work
-    async def action_browse_rooms(self):
+    async def action_toggle_rooms(self):
         """
         Open the room browser screen and handle selection.
 
@@ -283,33 +298,28 @@ class App(_App):
         """
         c = self.config
 
-        host = c.get("connect.host")
+        if self.screen == self.get_screen("rooms"):
+            self.pop_screen()
+        else:
+            identifier = await self.push_screen_wait("rooms")
 
-        if host is None:
-            return
+            if identifier is not None and identifier != c.get("connect.identifier"):
+                if (new := self.config_cache.get(identifier)) is None:
+                    # no config present
+                    new = Config(c.deepcopy())
 
-        port = c.get("connect.port")
+                    # remove previous files
+                    for path in (f"{self.NAME}.file", "render.file"):
+                        new.pop(path, None)
 
-        screen = RoomBrowserScreen(host, port)
-        identifier = await self.push_screen_wait(screen)
+                    # update identifier
+                    new["connect.identifier"] = identifier
 
-        if identifier is not None and identifier != c.get("connect.identifier"):
-            if (new := self.config_cache.get(identifier)) is None:
-                # no config present
-                new = Config(c.deepcopy())
+                    self.config_cache[identifier] = new
 
-                # remove previous files
-                for path in (f"{self.NAME}.file", "render.file"):
-                    new.pop(path, None)
+                self.config = new
 
-                # update identifier
-                new["connect.identifier"] = identifier
-
-                self.config_cache[identifier] = new
-
-            self.config = new
-
-            await self.recompose()
+                await self.recompose()
 
     async def action_toggle_dashboard(self):
         """
@@ -319,6 +329,7 @@ class App(_App):
             self.pop_screen()
         else:
             await self.push_screen("dashboard")
+
             self.push_config()
             self.push_client_states()
 

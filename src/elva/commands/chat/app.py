@@ -369,7 +369,6 @@ class UI(App):
 
         self.future[self.config["user.identifier"]] = self.message
 
-
     def compose(self):
         """
         Hook arranging child widgets.
