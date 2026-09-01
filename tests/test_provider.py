@@ -179,7 +179,9 @@ async def test_multiple_connect_divergent_history(free_tcp_port):
     identifier = get_identifier()
 
     # run the server
-    async with WebsocketServer(LOCALHOST, free_tcp_port, persistent=False) as server:
+    async with WebsocketServer(
+        LOCALHOST, free_tcp_port, persistent=FlagPolicy.NEVER
+    ) as server:
         # run the providers
         async with (
             WebsocketProvider(
