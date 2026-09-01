@@ -24,6 +24,8 @@ from elva.server import (
 ## ANYIO PYTEST PLUGIN
 pytestmark = pytest.mark.anyio
 
+parametrize = pytest.mark.parametrize
+
 
 # `websockets` runs only on `asyncio`, thus the `trio` backend of `anyio` fails
 @pytest.fixture(scope="module")
@@ -487,3 +489,59 @@ async def test_auth(free_tcp_port):
 
             await client.close()
             assert client.state == ConnectionState.CLOSED
+
+
+@parametrize(
+    ("policy", "name", "value"),
+    (
+        (FlagPolicy.NEVER, "NEVER", False),
+        (FlagPolicy.FALSE, "FALSE", False),
+        (FlagPolicy.TRUE, "TRUE", True),
+        (FlagPolicy.ALWAYS, "ALWAYS", True),
+    ),
+)
+def test_room_flag_policy(policy: FlagPolicy, name: str, value: bool) -> None:
+    """
+    Room flag policies have the expected names and represent the expected
+    booleans.
+
+    Arguments:
+        policy: the boolean policy.
+        name: the policy's name.
+        value: the policy's boolean value.
+    """
+    assert policy.name == name
+    assert bool(policy) is value
+
+
+@parametrize(
+    ("policy", "value", "expected"),
+    (
+        (FlagPolicy.NEVER, None, False),
+        (FlagPolicy.NEVER, True, False),
+        (FlagPolicy.NEVER, False, False),
+        (FlagPolicy.FALSE, None, False),
+        (FlagPolicy.FALSE, True, True),
+        (FlagPolicy.FALSE, False, False),
+        (FlagPolicy.TRUE, None, True),
+        (FlagPolicy.TRUE, True, True),
+        (FlagPolicy.TRUE, False, False),
+        (FlagPolicy.ALWAYS, None, True),
+        (FlagPolicy.ALWAYS, True, True),
+        (FlagPolicy.ALWAYS, False, True),
+    ),
+)
+def test_room_flag_policy_update(
+    policy: FlagPolicy,
+    value: bool | None,
+    expected: bool,
+) -> None:
+    """
+    A boolean is updated correctly with respect to the active policy.
+
+    Arguments:
+        policy: the boolean policy.
+        value: the boolean value to update.
+        expected: the updated value.
+    """
+    assert policy.update(value) is expected

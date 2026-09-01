@@ -86,6 +86,22 @@ class FlagPolicy(Enum):
             case "NEVER" | "FALSE":
                 return False
 
+    def update(self, value: bool | None = None) -> bool:
+        """
+        Update a given boolean value or get the policy's default boolean value.
+
+        Arguments:
+            value: the boolean value to update.
+
+        Returns:
+            the updated boolean value.
+        """
+        match self.name:
+            case "ALWAYS" | "NEVER":
+                return bool(self)
+            case "TRUE" | "FALSE":
+                return bool(self) if value is None else value
+
 
 def fetch_rooms(
     host: str,
@@ -812,23 +828,6 @@ class WebsocketServer(Component):
         if value is not None:
             return value == "1"
 
-    def update_flag(self, policy: FlagPolicy, value: bool | None = None) -> bool:
-        """
-        Update a flag depending on the URL query and the flag policy.
-
-        Arguments:
-            policy: the server policy for this flag.
-            value: flag given in the client's HTTP request query.
-
-        Returns:
-            `True` the flag should be set, else `False`.
-        """
-        match policy:
-            case FlagPolicy.ALWAYS | FlagPolicy.NEVER:
-                return bool(policy)
-            case FlagPolicy.TRUE | FlagPolicy.FALSE:
-                return bool(policy) if value is None else value
-
     def filter_flag(self, flag: RoomFlag, query: dict) -> bool:
         """
         Filter a flag member depending on its value and the flag policy.
@@ -844,7 +843,7 @@ class WebsocketServer(Component):
         policy = getattr(self, name)
         value = self.extract_flag(name, query)
 
-        out = self.update_flag(policy, value=value)
+        out = policy.update(value=value)
 
         return out
 
