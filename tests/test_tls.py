@@ -117,7 +117,7 @@ def test_check_name_mapping(member: Check) -> None:
 
 @parametrize(
     "member",
-    (reduce(or_, p) for i in range(2) for p in product(Check, repeat=i + 1)),
+    tuple(reduce(or_, p) for i in range(2) for p in product(Check, repeat=i + 1)),
 )
 def test_check_names(member: Check) -> None:
     """
@@ -209,7 +209,7 @@ def test_option_name_mapping(member: Option) -> None:
 
 @parametrize(
     "member",
-    (reduce(or_, p) for i in range(2) for p in product(Option, repeat=i + 1)),
+    tuple(reduce(or_, p) for i in range(2) for p in product(Option, repeat=i + 1)),
 )
 def test_option_names(member: Option) -> None:
     """
