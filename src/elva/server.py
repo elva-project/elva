@@ -6,7 +6,7 @@ import logging
 import re
 import socket
 from contextlib import closing
-from enum import Enum, IntFlag, auto
+from enum import Enum, Flag, auto
 from functools import partial, reduce
 from http import HTTPStatus
 from itertools import chain
@@ -270,7 +270,7 @@ class RequestProcessor:
                 return out
 
 
-class RoomFlag(IntFlag):
+class RoomFlag(Flag):
     """
     Flags controlling the behavior of a [`Room`][elva.server.Room].
     """
@@ -354,13 +354,13 @@ class Room(Component):
         self.clients = set()
 
         if path is not None:
-            self.path = path / f"{identifier}.y"
+            path /= f"{identifier}.y"
 
-            if self.path.exists():
+            if path.exists():
                 # ensure flags
                 self.flags |= RoomFlag.PERMANENT
-        else:
-            self.path = None
+
+        self.path = path
 
         if RoomFlag.PERMANENT in self.flags:
             # permanence implies persistence
@@ -373,7 +373,7 @@ class Room(Component):
         if RoomFlag.PERSISTENT in self.flags:
             self.ydoc = Doc()
 
-            if path is not None and RoomFlag.PERMANENT in self.flags:
+            if self.path is not None and RoomFlag.PERMANENT in self.flags:
                 # check for existence of data file before the store starts and creates one
                 exists = self.path.exists()
 

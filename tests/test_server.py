@@ -1,6 +1,7 @@
 import sqlite3
 import uuid
 from http import HTTPStatus
+from pathlib import Path
 
 import anyio
 import pytest
@@ -13,10 +14,14 @@ from websockets.http11 import Request, Response
 from websockets.protocol import State as ConnectionState
 
 from elva.auth import Auth, DummyAuth, basic_authorization_header
+from elva.config import Config
+from elva.files import Metadata
 from elva.protocol import YMessage
 from elva.server import (
     FlagPolicy,
     RequestProcessor,
+    Room,
+    RoomFlag,
     WebsocketServer,
     free_tcp_port,
 )
@@ -545,3 +550,195 @@ def test_room_flag_policy_update(
         expected: the updated value.
     """
     assert policy.update(value) is expected
+
+
+@parametrize(
+    ("flags", "expected"),
+    (
+        (
+            RoomFlag.NONE,
+            RoomFlag.NONE,
+        ),
+        (
+            RoomFlag.VISIBLE,
+            RoomFlag.VISIBLE,
+        ),
+        (
+            RoomFlag.PERSISTENT,
+            RoomFlag.PERSISTENT,
+        ),
+        (
+            RoomFlag.PERMANENT,
+            RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+        (
+            RoomFlag.VISIBLE | RoomFlag.PERMANENT,
+            RoomFlag.VISIBLE | RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+        (
+            RoomFlag.VISIBLE | RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+            RoomFlag.VISIBLE | RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+    ),
+)
+async def test_room_flags(flags: RoomFlag, expected: RoomFlag) -> None:
+    """
+    Room flags are set as given and updated if needed.
+
+    Arguments:
+        flags: the given room flags.
+        expected: the expected room flags to be set.
+    """
+    async with Room("foo", flags=flags) as room:
+        assert room.flags == expected
+
+
+@parametrize(
+    ("given", "exists", "flags", "expected"),
+    (
+        (
+            False,
+            False,
+            RoomFlag.NONE,
+            RoomFlag.NONE,
+        ),
+        (
+            True,
+            False,
+            RoomFlag.NONE,
+            RoomFlag.NONE,
+        ),
+        (
+            True,
+            True,
+            RoomFlag.NONE,
+            RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+        (
+            False,
+            False,
+            RoomFlag.PERMANENT,
+            RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+        (
+            True,
+            False,
+            RoomFlag.PERMANENT,
+            RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+        (
+            True,
+            True,
+            RoomFlag.PERMANENT,
+            RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+        (
+            False,
+            False,
+            RoomFlag.VISIBLE,
+            RoomFlag.VISIBLE,
+        ),
+        (
+            True,
+            False,
+            RoomFlag.VISIBLE,
+            RoomFlag.VISIBLE,
+        ),
+        (
+            True,
+            True,
+            RoomFlag.VISIBLE,
+            # no config in data file saying that this room is visible
+            RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+    ),
+)
+async def test_room_flags_with_path(
+    tmp_path: Path,
+    given: bool,
+    exists: bool,
+    flags: RoomFlag,
+    expected: RoomFlag,
+) -> None:
+    """
+    The room flags update accordingly in absence or presence of
+    a path argument or data file.
+
+    Arguments:
+        tmp_path: the path where the data file are potentially saved to.
+        given: whether the path argument is given to the room.
+        exists: whether the data file exists.
+        flags: the given room flags.
+        expected: the expected room flags to be set.
+    """
+    identifier = "foo"
+
+    # update path argument
+    if given:
+        path = tmp_path
+        data = tmp_path / f"{identifier}.y"
+    else:
+        path = None
+
+    if exists:
+        # create a file
+        data.touch()
+
+    async with Room(identifier, path=path, flags=flags) as room:
+        assert room.flags == expected
+
+        # the room set the path as expected
+        if given:
+            assert room.path == data
+        else:
+            assert room.path is None
+
+
+@parametrize(
+    ("given", "visible", "expected"),
+    (
+        (
+            False,
+            False,
+            RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+        (
+            True,
+            False,
+            RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+        (
+            True,
+            True,
+            RoomFlag.VISIBLE | RoomFlag.PERSISTENT | RoomFlag.PERMANENT,
+        ),
+    ),
+)
+async def test_room_flags_visibility_from_data_file(
+    tmp_path: Path,
+    given: bool,
+    visible: bool,
+    expected: RoomFlag,
+) -> None:
+    """
+    The room visibility flag is set according the the config in a data file
+    if present.
+
+    Arguments:
+        tmp_path: the path where the data file is saved to.
+        given: whether the config is given in the data file.
+        visible: the vibility value in the data file config.
+        expected: the expected room flags to be set.
+    """
+    identifier = "foo"
+
+    # create a data file
+    data = tmp_path / f"{identifier}.y"
+    file = Metadata(data)
+
+    if given:
+        # write the config
+        file.set_config(Config({"room": {"visible": visible}}))
+
+    async with Room(identifier, path=tmp_path) as room:
+        assert room.flags == expected
