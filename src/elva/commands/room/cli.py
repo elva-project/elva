@@ -67,3 +67,7 @@ def cli(config: dict) -> None | Callable:
     """
     if config.get("info"):
         return import_(".app", __package__).run
+
+    if config.get("permanent", False):
+        # permanence implies persistence
+        config["persistent"] = True
