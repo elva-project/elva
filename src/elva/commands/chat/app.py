@@ -298,6 +298,7 @@ class UI(App):
         self.ydoc = Doc()
         self.ydoc["history"] = self.history = Array()
         self.ydoc["future"] = self.future = Map()
+        self.rendered = self.history
 
     def set_defaults(self):
         fallback_id = self.get_new_id()

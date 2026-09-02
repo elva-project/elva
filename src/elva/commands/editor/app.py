@@ -45,6 +45,7 @@ class UI(App):
         self.ydoc = Doc()
         self.ytext = Text()
         self.ydoc["text"] = self.ytext
+        self.rendered = self.ytext
 
     def set_defaults(self):
         """

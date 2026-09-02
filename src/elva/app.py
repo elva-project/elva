@@ -255,7 +255,7 @@ class App(_App):
         """
         c = self.config
 
-        if (file := c.get("render.file")) is not None:
+        if (file := c.get("render.file")) is not None and hasattr(self, "rendered"):
             kwargs = dict(
                 (key, value)
                 for key in ("auto", "timeout")
@@ -263,7 +263,7 @@ class App(_App):
             )
 
             self.renderer = TextRenderer(
-                self.ytext,
+                self.rendered,
                 file,
                 **kwargs,
             )
