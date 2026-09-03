@@ -13,17 +13,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Add tests for `RoomFlag`s
-- Add tests for the `FlagPolicy` enum
-- Add tests for config file reading
+- Add tests
 - Add a `rendered` app attribute being set to the CRDT getting rendered by `TextRenderer`
+- Add the `command` decorator and tests for standard ELVA commands
+- Add support for symmetric encryption of messages to `WebsocketProvider`
+- Add `secret` option to the `connect` subcommand
+- Add room visibility management
+- Add in-app room browser screen to TUI editor
+- Add client type parsing on server connection
+- Add default port 41536 for server and clients
+- Add room listing API and CLI command
+- Add TLS subcommand with TLS support to `WebsocketProvider`
+- Add `deepsort` function for sorting context output
+- Add `--unset` CLI option and alteration concept
+- Support paths in the `Config.__contains__` method
+- Add `host` and `port` options for the `server` app
+- Add `config` module with `Config` wrapper class
+- Add `txn` parameter to edit callbacks of `History` and `Future` widgets
+- Add tests for cursor awareness logic in `YTextArea` widget
+- Add app template with header, footer, info screen and room browser screen
+- Add the `TextEventParser` mixin to the `YTextArea` widget
+- Add `Metadata` and `Data` classes
 
 ### Changed
 
+- Make subcommands chainable
 - Upgrade dependencies
-- Make `permanent` CLI flag imply the `persistent` flag for both the `WebsocketProvider` and the `Room`
+- Make `permanent` CLI flag imply the `persistent` flag
+- Apply `ruff` formatting
 - Make room browser screen action toggle
 - Ensure correct room flags in presence of a data file
+- Check the component state before waiting for a state change
+- Wait for components instead of workers on unmounting an ELVA app
+- Make `secret` decorator support positional and keyword arguments
+- Manage room persistence on receiving erroneous messages
+- Rename `Password` wrapper to `Secret`
+- Move `secret` CLI option to `cli` subpackage
+- Display the config in TOML syntax
+- Make editor UI reloadable
+- Extend room management to persistence and permanence
+- Log client IP and room name on connect/disconnect
+- Make `context` command dump config if specified
+- Relax minimum identifier length to 1
+- Enable `config` section definition in config files
+- Defer importing `anyio` dependency into the `server` app routine
+- Replace `setuptools.find_namespace_packages` with own implementation
+- Make storing the config in the data file metadata opt-in
+- Move config utilities `clean` and `convert` to the `config` module
+- Adapt app commands and `SQLiteStore` to the new `Config` API
+- Derive `Config` from `dict`
+- Refactor `SQLiteStore` to use synchronous `sqlite3` only
+- Move `config` subcommand into `commands` directory again
+- Enhance info message for ignored data files
+- Split `cli` module and integrate `config` subcommand permanently
+- Adapt commands to use the `Config` class
+- Adapt the `SQLiteStore` component and apps to the new config structure
+- Update cursors based in index instead of location
+- Manage `YTextArea` edits via origins solely
+- Catch cases when `YTextArea` was no `Awareness` doc given
+- Move awareness handling completely to `YTextArea` widget
+- Improve awareness cleanup and cursor broadcast handling
+- Remap save keybindings and add filename placeholder
+- Show quit binding and host:port/room in editor footer
+- Display room identifier in editor title
+- Improve room ID validation error messages
+- Take deletion range from current edit
+- Move the insertion length logic from the base class into `TextEventParser` and `ArrayEventParser`
+- Rewrite `History` and `Future` widgets with `ArrayEventParser` and `MapEventParser` mixins
+- Rewrite event parser logic and tests
+- Rename private parser methods and attributes
 
 ### Fixed
 
@@ -31,6 +89,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fix regression from introducing `RoomFlag`s in the `server` module
 - Fix log leakage in component tests
 - Fix `chat` crashing when no `user` config is available by moving the message instantiation into the `reload` method
+- Fix `SyntaxWarning` about invalid escape sequence in `ConfigView` rendering
+- Fix user name query in the `AwarenessView` widget
+- Fix minor documentation, type annotation and formatting issues
+- Fix color query from a client awareness state
+- Fix parser tests to use the mandatory `txn` parameter
+- Fix app config sections not parsed in the `context` subcommand
+- Fix styling strips via private API
+- Fix cursor position tracking in `YTextArea` widget to only adjust for local edits
+- Fix cursor position tracking during edits and line wrapping
+- Fix cursor awareness updates during typing
+- Fix `test_server` assertion for updated validation messages
+- Fix `README.md` links
+- Fix parsing of separate deletion ranges
+- Fix removing future message by deletion
+
+### Removed
+
+- Remove empty path as bad identifier test case
+- Remove `cli.py` module as merge artifact
+- Remove `apps` directory as merge artifact
+- Remove `sqlite_anyio` from dependencies
+- Remove LDAP-related functionality
+- Remove `identifier` argument from `SQLiteStore` constructor
+- Remove `config` and `context` section in `context` subcommand output
+- Remove arguments from selection watcher in `YTextArea`
 
 
 
