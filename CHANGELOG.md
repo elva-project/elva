@@ -9,6 +9,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 
 
+## 0.37 - 2026-09-03
+
+### Added
+
+- Add tests for `RoomFlag`s
+- Add tests for the `FlagPolicy` enum
+- Add tests for config file reading
+- Add a `rendered` app attribute being set to the CRDT getting rendered by `TextRenderer`
+
+### Changed
+
+- Upgrade dependencies
+- Make `permanent` CLI flag imply the `persistent` flag for both the `WebsocketProvider` and the `Room`
+- Make room browser screen action toggle
+- Ensure correct room flags in presence of a data file
+
+### Fixed
+
+- Fix missed line in update to `FlagPolicy`s
+- Fix regression from introducing `RoomFlag`s in the `server` module
+- Fix log leakage in component tests
+- Fix `chat` crashing when no `user` config is available by moving the message instantiation into the `reload` method
+
+
+
 ## 0.35 - 2025-08-19
 
 ### Fixed
